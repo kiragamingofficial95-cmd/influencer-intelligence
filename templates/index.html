@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Agency Intelligence Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f1a;color:#e0e0e0;line-height:1.6}
+.container{max-width:1600px;margin:0 auto;padding:20px}
+
+/* Header */
+header{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);padding:24px 32px;border-radius:16px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;border:1px solid #2a2a4a}
+header h1{font-size:24px;font-weight:700;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+header .subtitle{font-size:13px;color:#888;margin-top:4px}
+header .actions{display:flex;gap:12px}
+.btn{padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 15px rgba(102,126,234,.4)}
+.btn-secondary{background:#2a2a4a;color:#e0e0e0}
+.btn-secondary:hover{background:#3a3a5a}
+.btn-success{background:linear-gradient(135deg,#48bb78,#38a169);color:#fff}
+
+/* Score card */
+.score-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:24px}
+.score-card{background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:20px;border:1px solid #2a2a4a;text-align:center}
+.score-card .score-label{font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.score-card .score-value{font-size:36px;font-weight:700;margin-bottom:4px}
+.score-card .score-sub{font-size:11px;color:#666}
+.score-high{color:#48bb78}
+.score-medium{color:#ecc94b}
+.score-low{color:#fc8181}
+
+/* Cards */
+.card{background:#1a1a2e;border-radius:12px;padding:24px;margin-bottom:20px;border:1px solid #2a2a4a}
+.card h2{font-size:18px;margin-bottom:16px;color:#ccc}
+.card h3{font-size:15px;margin-bottom:12px;color:#aaa}
+
+/* Grid layouts */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+@media(max-width:1024px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+/* Metrics */
+.metric{text-align:center;padding:16px;background:#16213e;border-radius:8px}
+.metric .value{font-size:28px;font-weight:700}
+.metric .label{font-size:12px;color:#888;margin-top:4px}
+.metric-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #2a2a4a}
+th{color:#888;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+tr:hover{background:#16213e}
+.status{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.status-won{background:#22543d;color:#48bb78}
+.status-lost{background:#522224;color:#fc8181}
+.status-open{background:#2a2a4a;color:#a0aec0}
+.status-meeting{background:#2a4365;color:#63b3ed}
+.status-positive{background:#2d4a2e;color:#68d391}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;background:#2a2a4a;color:#888;border:none;transition:all .2s}
+.tab.active{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.tab:hover{background:#3a3a5a}
+
+/* Charts */
+.chart-container{position:relative;height:300px;margin-bottom:16px}
+
+/* Insights */
+.insight{padding:12px 16px;background:#16213e;border-radius:8px;margin-bottom:8px;border-left:3px solid #667eea}
+.insight.winning{border-left-color:#48bb78}
+.insight.warning{border-left-color:#ecc94b}
+.insight.critical{border-left-color:#fc8181}
+.insight .label{font-size:11px;color:#888;margin-bottom:4px}
+.insight .text{font-size:14px}
+
+/* Alert banner */
+.alert{background:#22543d;color:#48bb78;padding:12px 20px;border-radius:8px;margin-bottom:16px;font-size:14px;border:1px solid #276749}
+
+/* Section toggle */
+.section{display:none}
+.section.active{display:block}
+
+/* Loading */
+.loading{text-align:center;padding:60px;color:#666}
+.loading .spinner{width:40px;height:40px;border:4px solid #2a2a4a;border-top-color:#667eea;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Progress bar */
+.progress-bar{height:8px;background:#2a2a4a;border-radius:4px;overflow:hidden;margin:4px 0}
+.progress-fill{height:100%;border-radius:4px;transition:width .6s}
+
+/* Tooltip */
+.tooltip{position:relative;cursor:help;border-bottom:1px dashed #555}
+
+/* Responsive */
+@media(max-width:768px){
+  header{flex-direction:column;gap:16px;text-align:center}
+  .score-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* Small additions */
+.mt-4{margin-top:16px}
+.mb-4{margin-bottom:16px}
+.text-center{text-align:center}
+.flex{display:flex}
+.flex-between{display:flex;justify-content:space-between;align-items:center}
+.gap-8{gap:8px}
+.gap-4{gap:4px}
+.text-green{color:#48bb78}
+.text-red{color:#fc8181}
+.text-yellow{color:#ecc94b}
+.text-muted{color:#888}
+.font-bold{font-weight:700}
+.text-sm{font-size:12px}
+.text-lg{font-size:20px}
+.text-2xl{font-size:28px}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>Agency Intelligence System</h1>
+      <div class="subtitle">Influencer Marketing Agency · Performance Analytics · Revenue Intelligence</div>
+    </div>
+    <div class="actions" style="align-items:center;gap:12px">
+      <div id="gmailAuthBadge" style="display:none;align-items:center;gap:8px;padding:6px 14px;border-radius:8px;font-size:13px;background:#16213e;border:1px solid #2a2a4a">
+        <span id="authStatusText" style="color:#888">Not signed in</span>
+        <span id="authUserEmail" style="color:#48bb78;font-size:11px;display:none"></span>
+        <a id="authActionBtn" href="/api/gmail/auth/login" class="btn" style="padding:4px 14px;font-size:12px;text-decoration:none;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:6px">Sign in</a>
+      </div>
+      <button class="btn btn-secondary" onclick="refreshData()">⟳ Refresh</button>
+      <button class="btn btn-success" onclick="initDemo()">Load Demo Data</button>
+      <button class="btn btn-primary" onclick="switchTab('export')">📥 Export All Emails</button>
+      <a href="/admin" class="btn" style="padding:10px 20px;font-size:14px;text-decoration:none;background:linear-gradient(135deg,#764ba2,#667eea);color:#fff;border-radius:8px;font-weight:600">🔐 Admin</a>
+    </div>
+  </header>
+
+  <div id="statusBanner"></div>
+
+  <!-- Tab Navigation -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-section="overview">📊 Overview</button>
+    <button class="tab" data-section="pipeline">🔷 Pipeline</button>
+    <button class="tab" data-section="segments">🎯 Segments</button>
+    <button class="tab" data-section="metrics">📈 Advanced Metrics</button>
+    <button class="tab" data-section="campaigns">📋 Campaign Analysis</button>
+    <button class="tab" data-section="signals">🚨 Buying Signals</button>
+    <button class="tab" data-section="forecast">💰 Revenue Forecast</button>
+    <button class="tab" data-section="followup">📞 Follow-Up Analysis</button>
+    <button class="tab" data-section="report">📄 Strategic Report</button>
+    <button class="tab" data-section="export">📥 Export</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="loading">
+    <div class="spinner"></div>
+    <p>Loading agency intelligence data...</p>
+    <p style="color:#555;font-size:13px;margin-top:8px">
+      <span id="loadingDetail">Connecting to server...</span>
+    </p>
+  </div>
+
+  <!-- ============ OVERVIEW ============ -->
+  <div id="section-overview" class="section active">
+    <div class="score-grid" id="healthScores"></div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Pipeline Overview</h2>
+        <div id="pipelineOverview" class="metric-row"></div>
+        <div style="margin-top:16px">
+          <h3>Funnel Conversion</h3>
+          <div id="funnelChart"><canvas id="funnelChartCanvas" height="280"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Key Metrics at a Glance</h2>
+        <div id="keyMetrics" class="metric-row"></div>
+        <div style="margin-top:16px">
+          <h3>Outreach Performance</h3>
+          <div id="outreachChart"><canvas id="outreachChartCanvas" height="280"></canvas></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Executive Summary</h2>
+      <div id="executiveSummary" class="insight"></div>
+    </div>
+  </div>
+
+  <!-- ============ PIPELINE ============ -->
+  <div id="section-pipeline" class="section">
+    <div class="card">
+      <h2>Pipeline Timeline</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr><th>Prospect</th><th>Company</th><th>Industry</th><th>First Contact</th><th>Messages</th><th>Stage</th><th>Outcome</th><th>Value</th></tr>
+          </thead>
+          <tbody id="pipelineTable"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Funnel Breakdown</h2>
+        <div id="funnelBreakdown"></div>
+      </div>
+      <div class="card">
+        <h2>Outcome Distribution</h2>
+        <canvas id="outcomeChart" height="280"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SEGMENTS ============ -->
+  <div id="section-segments" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Industry Performance</h2>
+        <div style="overflow-x:auto">
+          <table><thead><tr><th>Industry</th><th>Conversations</th><th>Positive Rate</th><th>Meeting Rate</th><th>Close Rate</th><th>Score</th></tr></thead>
+          <tbody id="industryTable"></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Industry Ranking</h2>
+        <canvas id="industryChart" height="280"></canvas>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Decision-Maker Roles</h2>
+        <div style="overflow-x:auto">
+          <table><thead><tr><th>Role</th><th>Conversations</th><th>Response Rate</th><th>Meeting Rate</th></tr></thead>
+          <tbody id="roleTable"></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Regional Opportunities</h2>
+        <div style="overflow-x:auto">
+          <table><thead><tr><th>Location</th><th>Conversations</th><th>Meeting Rate</th><th>Recommendation</th></tr></thead>
+          <tbody id="locationTable"></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ METRICS ============ -->
+  <div id="section-metrics" class="section">
+    <div class="card">
+      <h2>Advanced Performance Metrics</h2>
+      <div class="grid-3" id="advancedMetricsGrid"></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Touch Response Rates</h2>
+        <canvas id="touchChart" height="280"></canvas>
+      </div>
+      <div class="card">
+        <h2>Personalization Impact</h2>
+        <canvas id="personalizationChart" height="280"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Efficiency Metrics</h2>
+      <div class="grid-3" id="efficiencyMetrics"></div>
+    </div>
+  </div>
+
+  <!-- ============ CAMPAIGNS ============ -->
+  <div id="section-campaigns" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Winning Patterns</h2>
+        <div id="winningPatterns"></div>
+      </div>
+      <div class="card">
+        <h2>CTA Performance Comparison</h2>
+        <canvas id="ctaChart" height="280"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Subject Line & Messaging Analysis</h2>
+      <div class="grid-2" id="campaignDetails"></div>
+    </div>
+  </div>
+
+  <!-- ============ SIGNALS ============ -->
+  <div id="section-signals" class="section">
+    <div class="card">
+      <h2>Buying Intent Signals Detected</h2>
+      <div id="signalCards" class="grid-3"></div>
+    </div>
+    <div class="card">
+      <h2>Missed Opportunities</h2>
+      <div id="missedOpportunities"></div>
+    </div>
+  </div>
+
+  <!-- ============ FORECAST ============ -->
+  <div id="section-forecast" class="section">
+    <div class="card">
+      <h2>Revenue Scenarios</h2>
+      <div class="grid-3" id="forecastScenarios"></div>
+    </div>
+    <div class="card">
+      <h2>MRR Targets — What It Takes</h2>
+      <div style="overflow-x:auto">
+        <table><thead><tr><th>Target MRR</th><th>Clients Needed</th><th>Meetings Needed</th><th>Replies Needed</th><th>Outreach Needed</th></tr></thead>
+        <tbody id="projectionTable"></tbody></table>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Bottlenecks & Impact</h2>
+        <div id="bottlenecks"></div>
+      </div>
+      <div class="card">
+        <h2>Revenue Impact of Fixing Bottlenecks</h2>
+        <canvas id="bottleneckChart" height="280"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FOLLOW-UP ============ -->
+  <div id="section-followup" class="section">
+    <div class="grid-2">
+      <div class="card">
+        <h2>Sequence Performance</h2>
+        <canvas id="sequenceChart" height="280"></canvas>
+      </div>
+      <div class="card">
+        <h2>Optimal Follow-Up Strategy</h2>
+        <div id="followupStrategy"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Messaging by Touch</h2>
+      <div id="messagingByTouch"></div>
+    </div>
+  </div>
+
+  <!-- ============ REPORT ============ -->
+  <div id="section-report" class="section">
+    <div class="card">
+      <h2>Executive Strategic Report</h2>
+      <div id="executiveReport"></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Top Recommendations</h2>
+        <div id="recommendations"></div>
+      </div>
+      <div class="card">
+        <h2>Quick Wins</h2>
+        <div id="quickWins"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Niche Priorities (Next 90 Days)</h2>
+      <div id="nichePriorities"></div>
+    </div>
+    <div class="card">
+      <h2>Highest Impact Changes</h2>
+      <div id="highImpactChanges"></div>
+    </div>
+  </div>
+
+  <!-- ============ EXPORT ============ -->
+  <div id="section-export" class="section">
+    <div class="card" style="border-color:#667eea">
+      <div class="flex-between" style="margin-bottom:16px">
+        <div>
+          <h2 style="margin:0">📥 Full Gmail Export</h2>
+          <p style="color:#888;font-size:13px;margin-top:4px">
+            Exports ALL emails, threads, and chats to organized .txt files.
+            <strong>No AI. No filtering. Raw data only.</strong>
+          </p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success" onclick="runDemoExport()">Generate Demo Export</button>
+          <button class="btn btn-primary" onclick="checkAndRunLiveExport()">Export Real Gmail</button>
+        </div>
+      </div>
+      <div id="exportStatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Export Files</h2>
+      <div id="exportFileList">
+        <p style="color:#888">No exports yet. Click "Generate Demo Export" to create sample data.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>What Gets Exported</h2>
+      <div class="grid-3" style="margin-top:12px">
+        <div class="metric">
+          <div class="value">📨</div>
+          <div class="label">All Messages (Inbox, Sent, Spam, Trash)</div>
+        </div>
+        <div class="metric">
+          <div class="value">🧵</div>
+          <div class="label">Full Threads with Conversation Order</div>
+        </div>
+        <div class="metric">
+          <div class="value">📋</div>
+          <div class="label">Complete Headers (SPF, DKIM, Auth, etc.)</div>
+        </div>
+        <div class="metric">
+          <div class="value">📝</div>
+          <div class="label">Plain Text Body Content</div>
+        </div>
+        <div class="metric">
+          <div class="value">🏷️</div>
+          <div class="label">Labels & Categories</div>
+        </div>
+        <div class="metric">
+          <div class="value">🔗</div>
+          <div class="label">Reply Chains & References</div>
+        </div>
+      </div>
+      <div class="insight" style="margin-top:12px;border-left-color:#667eea">
+        <div class="label">Data Integrity</div>
+        <div class="text">
+          Every message header is preserved: Message-ID, In-Reply-To, References, DKIM signatures,
+          SPF results, authentication status, custom headers. No fields are stripped or summarized.
+          This is a forensically complete export suitable for auditing, migration, or offline archiving.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let state = {};
+
+function switchTab(name) {
+  const tab = document.querySelector(`.tab[data-section="${name}"]`);
+  if (tab) tab.click();
+}
+
+// Tab switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.getElementById('section-' + tab.dataset.section).classList.add('active');
+  });
+});
+
+// Auth badge — shows sign in / sign out in the top bar
+async function updateAuthBadge() {
+  const badge = document.getElementById('gmailAuthBadge');
+  const text = document.getElementById('authStatusText');
+  const btn = document.getElementById('authActionBtn');
+  const emailSpan = document.getElementById('authUserEmail');
+  badge.style.display = 'flex';
+  try {
+    const s = await api('/api/gmail/status');
+    if (s.authenticated) {
+      text.textContent = '✅ Gmail connected';
+      btn.textContent = 'Sign out';
+      btn.href = '/api/gmail/auth/logout';
+      btn.style.background = '#522224';
+      if (s.user_email) {
+        emailSpan.textContent = 'USER: ' + s.user_email;
+        emailSpan.style.display = 'inline';
+      } else {
+        emailSpan.style.display = 'none';
+      }
+    } else if (s.has_credentials || s.has_credentials_file || s.has_env_credentials) {
+      text.textContent = '🔑 Sign in with Google';
+      btn.textContent = 'Sign in';
+      btn.href = '/api/gmail/auth/login';
+      btn.style.background = 'linear-gradient(135deg,#667eea,#764ba2)';
+      emailSpan.style.display = 'none';
+    } else {
+      text.textContent = '❌ No credentials';
+      btn.textContent = 'Setup';
+      btn.href = '#';
+      btn.style.background = '#522224';
+      emailSpan.style.display = 'none';
+    }
+  } catch(e) {
+    text.textContent = '❌ Auth error';
+  }
+}
+
+async function api(path, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(path, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const text = await res.text();
+        try { return JSON.parse(text); } catch(_) { throw new Error('Invalid JSON response'); }
+      }
+      if ((res.status === 502 || res.status === 504) && i < retries - 1) {
+        await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+        continue;
+      }
+      throw new Error(`API error: ${res.status}`);
+    } catch(e) {
+      if (i < retries - 1) {
+        await new Promise(r => setTimeout(r, 2000 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+function scoreClass(val) {
+  if (val >= 70) return 'score-high';
+  if (val >= 40) return 'score-medium';
+  return 'score-low';
+}
+
+function formatCurrency(val) {
+  if (val >= 1000) return '$' + (val/1000).toFixed(1) + 'K';
+  return '$' + val.toFixed(0);
+}
+
+// Initialize demo data
+async function initDemo() {
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('statusBanner').innerHTML = '<div class="alert">⏳ Generating demo data...</div>';
+  try {
+    const res = await fetch('/demo/init');
+    const data = await res.json();
+    document.getElementById('statusBanner').innerHTML = '<div class="alert">✅ ' + data.message + '. Loading dashboard...</div>';
+    await loadAll();
+  } catch(e) {
+    document.getElementById('statusBanner').innerHTML = '<div class="alert" style="background:#522224;color:#fc8181">❌ Error: ' + e.message + '</div>';
+  }
+}
+
+async function refreshData() {
+  document.getElementById('loading').style.display = 'block';
+  try {
+    await api('/api/refresh');
+    await loadAll();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ============ EXPORT FUNCTIONS ============
+
+async function runDemoExport() {
+  const statusDiv = document.getElementById('exportStatus');
+  const fileListDiv = document.getElementById('exportFileList');
+  statusDiv.innerHTML = '<div class="alert">⏳ Generating demo export data...</div>';
+
+  try {
+    const res = await fetch('/api/export/run-demo?messages=100&threads=30');
+    const data = await res.json();
+
+    if (data.status === 'complete') {
+      const s = data.stats;
+      statusDiv.innerHTML = `
+        <div class="alert" style="background:#22543d;border-color:#48bb78">
+          ✅ Export complete!
+          ${s.messages} messages · ${s.threads} threads · ${s.total_size_mb} MB
+          <br><span style="font-size:12px;color:#68d391">
+            Files saved to: ${data.demo ? 'Demo mode (no real Gmail accessed)' : 'Gmail export directory'}
+          </span>
+        </div>`;
+      if (data.summary) {
+        statusDiv.innerHTML += `<div class="insight" style="margin-top:8px"><pre style="font-size:11px;color:#aaa;white-space:pre-wrap">${escapeHtml(data.summary)}</pre></div>`;
+      }
+    } else {
+      statusDiv.innerHTML = `<div class="alert" style="background:#522224;color:#fc8181">❌ Export failed</div>`;
+    }
+  } catch(e) {
+    statusDiv.innerHTML = `<div class="alert" style="background:#522224;color:#fc8181">❌ Error: ${e.message}</div>`;
+  }
+
+  // Refresh file list
+  loadExportFiles();
+}
+
+async function checkAndRunLiveExport() {
+  const statusDiv = document.getElementById('exportStatus');
+
+  try {
+    // Check Gmail auth status
+    const gmailStatus = await api('/api/gmail/status');
+
+    if (!gmailStatus.has_credentials && !gmailStatus.has_credentials_file) {
+      statusDiv.innerHTML = `
+        <div class="alert" style="background:#522224;color:#fc8181">
+          ❌ No credentials.json found.
+          <br><span style="font-size:12px;color:#feb2b2">
+            Place your Google OAuth credentials file in the project root.
+          </span>
+        </div>`;
+      return;
+    }
+
+    if (!gmailStatus.authenticated) {
+      // Redirect to Google Sign-In
+      statusDiv.innerHTML = `
+        <div class="alert" style="background:#2a4365;border-color:#63b3ed">
+          <div style="font-size:16px;margin-bottom:8px">🔑 Sign in with Google required</div>
+          <p style="font-size:13px;margin-bottom:12px">
+            Click the button below to authorize Gmail access (read-only).
+            You'll be redirected to Google, sign in, and come back automatically.
+          </p>
+          <a href="/api/gmail/auth/login" class="btn btn-primary" style="display:inline-block;text-decoration:none">
+            Sign in with Google →
+          </a>
+        </div>`;
+      return;
+    }
+
+    // Already authorized - start background export
+    statusDiv.innerHTML = '<div class="alert">⏳ Starting Gmail export...</div>';
+
+    const res = await fetch('/api/export/run-live?messages=500&threads=200');
+    const { task_id } = await res.json();
+    if (!task_id) throw new Error('No task_id returned');
+
+    // Poll for completion
+    statusDiv.innerHTML = '<div class="alert">⏳ Exporting Gmail data (this may take a few minutes)...</div>';
+
+    let done = false;
+    while (!done) {
+      await new Promise(r => setTimeout(r, 2000));
+      const taskRes = await fetch('/api/export/task/' + task_id);
+      const task = await taskRes.json();
+
+      if (task.status === 'running') {
+        statusDiv.innerHTML = `<div class="alert">⏳ ${escapeHtml(task.progress)}</div>`;
+      } else if (task.status === 'complete') {
+        const s = task.stats;
+        statusDiv.innerHTML = `
+          <div class="alert" style="background:#22543d;border-color:#48bb78">
+            ✅ Live export complete!
+            ${s.messages} messages · ${s.threads} threads · ${s.total_size_mb} MB
+            <br><span style="font-size:12px;color:#68d391">No AI used. Raw data only.</span>
+          </div>`;
+        if (task.summary) {
+          statusDiv.innerHTML += `<div class="insight" style="margin-top:8px"><pre style="font-size:11px;color:#aaa;white-space:pre-wrap">${escapeHtml(task.summary)}</pre></div>`;
+        }
+        done = true;
+      } else {
+        statusDiv.innerHTML = `<div class="alert" style="background:#522224;color:#fc8181">❌ Export failed: ${escapeHtml(task.error || 'Unknown error')}</div>`;
+        done = true;
+      }
+    }
+  } catch(e) {
+    statusDiv.innerHTML = `<div class="alert" style="background:#522224;color:#fc8181">❌ Error: ${e.message}</div>`;
+  }
+
+  loadExportFiles();
+}
+
+async function loadExportFiles() {
+  const fileListDiv = document.getElementById('exportFileList');
+  try {
+    const data = await api('/api/export/files');
+    if (!data.files || data.files.length === 0) {
+      fileListDiv.innerHTML = '<p style="color:#888">No exports yet. Click "Generate Demo Export" above.</p>';
+      return;
+    }
+    let html = '<div style="overflow-x:auto"><table><thead><tr><th>File Name</th><th>Size</th><th>Modified</th><th>Download</th></tr></thead><tbody>';
+    for (const f of data.files) {
+      html += `<tr>
+        <td>${escapeHtml(f.name)}</td>
+        <td>${f.size_mb > 1 ? f.size_mb.toFixed(1) + ' MB' : (f.size_bytes / 1024).toFixed(1) + ' KB'}</td>
+        <td>${formatDate(f.modified)}</td>
+        <td><a href="/api/export/download/${encodeURIComponent(f.name)}" class="btn btn-secondary" style="padding:4px 12px;font-size:12px;text-decoration:none">⬇ Download</a></td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    html += `<p style="color:#666;font-size:12px;margin-top:8px">Export directory: ${escapeHtml(data.export_dir)}</p>`;
+    fileListDiv.innerHTML = html;
+  } catch(e) {
+    fileListDiv.innerHTML = `<p style="color:#fc8181">Error loading exports: ${e.message}</p>`;
+  }
+}
+
+async function loadAll() {
+  updateAuthBadge();
+  const detail = document.getElementById('loadingDetail');
+  // Load each section independently — one failure won't break the whole dashboard
+  async function tryLoad(key, path) {
+    try {
+      detail.textContent = 'Loading ' + key + '...';
+      state[key] = await api(path);
+    } catch(e) {
+      console.warn(key, 'failed:', e.message);
+    }
+  }
+  state = {};
+  await Promise.all([
+    tryLoad('summary', '/api/dashboard/summary'),
+    tryLoad('segments', '/api/segments'),
+    tryLoad('signals', '/api/signals'),
+    tryLoad('campaigns', '/api/campaigns'),
+    tryLoad('followups', '/api/followups'),
+    tryLoad('forecast', '/api/forecast'),
+    tryLoad('report', '/api/report'),
+    tryLoad('pipeline', '/api/pipeline/timeline'),
+    tryLoad('metrics', '/api/metrics/advanced'),
+  ]);
+  try {
+    renderAll();
+  } catch(e) {
+    console.error('renderAll failed:', e);
+  }
+  document.getElementById('loading').style.display = 'none';
+  loadExportFiles();
+}
+
+function renderAll() {
+  renderHealthScores();
+  renderPipelineOverview();
+  renderKeyMetrics();
+  renderFunnelChart();
+  renderOutreachChart();
+  renderExecutiveSummary();
+  renderPipelineTable();
+  renderFunnelBreakdown();
+  renderOutcomeChart();
+  renderIndustryTable();
+  renderIndustryChart();
+  renderRoleTable();
+  renderLocationTable();
+  renderAdvancedMetrics();
+  renderTouchChart();
+  renderPersonalizationChart();
+  renderEfficiencyMetrics();
+  renderWinningPatterns();
+  renderCTAChart();
+  renderCampaignDetails();
+  renderSignalCards();
+  renderMissedOpportunities();
+  renderForecastScenarios();
+  renderProjectionTable();
+  renderBottlenecks();
+  renderBottleneckChart();
+  renderSequenceChart();
+  renderFollowupStrategy();
+  renderMessagingByTouch();
+  renderExecutiveReport();
+  renderRecommendations();
+  renderQuickWins();
+  renderNichePriorities();
+  renderHighImpactChanges();
+  loadExportFiles();
+}
+
+// ============ RENDER FUNCTIONS ============
+
+function renderHealthScores() {
+  const h = state.summary.health;
+  if (!h) return;
+  const scores = [
+    {label:'Overall Health',value:h.overall,sub:'Composite Score'},
+    {label:'Outreach Health',value:h.outreach_health,sub:'Reply & Engagement'},
+    {label:'Targeting Score',value:h.targeting_score,sub:'ICP Precision'},
+    {label:'Offer Strength',value:h.offer_strength,sub:'Conversion Power'},
+    {label:'Follow-Up Score',value:h.follow_up_score,sub:'Sequence Execution'},
+    {label:'Market Positioning',value:h.market_positioning,sub:'Market Fit'},
+    {label:'Revenue Efficiency',value:h.revenue_efficiency,sub:'ROI Metrics'},
+    {label:'Growth Potential',value:h.growth_potential,sub:'Upside Opportunity'},
+  ];
+  document.getElementById('healthScores').innerHTML = scores.map(s => `
+    <div class="score-card">
+      <div class="score-label">${s.label}</div>
+      <div class="score-value ${scoreClass(s.value)}">${s.value}</div>
+      <div class="score-sub">${s.sub}</div>
+    </div>`).join('');
+}
+
+function renderPipelineOverview() {
+  const p = state.summary.pipeline;
+  if (!p) return;
+  const stages = p.stages || {};
+  const metrics = [
+    {value:p.total_conversations??0,label:'Total Conversations'},
+    {value:Object.values(stages).reduce((a,b)=>a+b,0),label:'Active Prospects'},
+    {value:p.outcomes?.closed_won||0,label:'Closed Won'},
+    {value:p.outcomes?.lost||0,label:'Closed Lost'},
+  ];
+  document.getElementById('pipelineOverview').innerHTML = metrics.map(m => `
+    <div class="metric">
+      <div class="value">${m.value}</div>
+      <div class="label">${m.label}</div>
+    </div>`).join('');
+}
+
+function renderKeyMetrics() {
+  const f = state.summary.funnel;
+  if (!f) return;
+  const metrics = [
+    {value:f.positive_rate+'%',label:'Positive Reply Rate'},
+    {value:f.meeting_booking_rate+'%',label:'Meeting Booking Rate'},
+    {value:f.close_rate+'%',label:'Close Rate'},
+    {value:f.proposal_to_close+'%',label:'Proposal→Close'},
+  ];
+  document.getElementById('keyMetrics').innerHTML = metrics.map(m => `
+    <div class="metric">
+      <div class="value">${m.value}</div>
+      <div class="label">${m.label}</div>
+    </div>`).join('');
+}
+
+function renderFunnelChart() {
+  const f = state.summary.funnel;
+  if (!f) return;
+  const ctx = document.getElementById('funnelChartCanvas').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Positive Replies', 'Meetings Booked', 'Proposals Sent', 'Closed Won'],
+      datasets: [{
+        label: 'Count',
+        data: [f.positive_replies, f.meetings_booked, f.proposals_sent, f.closed_won],
+        backgroundColor: ['#48bb78','#63b3ed','#ecc94b','#667eea'],
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{display:false}},
+      scales: {y:{beginAtZero:true,grid:{color:'#2a2a4a'}},x:{grid:{display:false}}}
+    }
+  });
+}
+
+function renderOutreachChart() {
+  const p = state.summary.pipeline;
+  if (!p || !p.stages) return;
+  const stages = p.stages;
+  const labels = Object.keys(stages);
+  const values = Object.values(stages);
+  const colors = ['#667eea','#63b3ed','#48bb78','#ecc94b','#fc8181','#a0aec0','#764ba2'];
+  const ctx = document.getElementById('outreachChartCanvas').getContext('2d');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors.slice(0, labels.length),
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{position:'bottom',labels:{color:'#888'}}}
+    }
+  });
+}
+
+function renderExecutiveSummary() {
+  const r = state.report;
+  if (!r || !r.executive_summary) return;
+  document.getElementById('executiveSummary').innerHTML = `<div class="text">${r.executive_summary}</div>`;
+}
+
+function renderPipelineTable() {
+  const data = state.pipeline?.timeline || [];
+  const tbody = document.getElementById('pipelineTable');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#666">No data</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.slice(0, 50).map(p => {
+    const stageClass = p.outcome === 'closed_won' ? 'status-won' :
+      p.outcome === 'lost' || p.outcome === 'closed_lost' ? 'status-lost' :
+      p.funnel_stage === 'meeting' ? 'status-meeting' :
+      p.is_positive ? 'status-positive' : 'status-open';
+    return `<tr>
+      <td><strong>${escapeHtml(p.prospect_name)}</strong></td>
+      <td>${escapeHtml(p.prospect_company)}</td>
+      <td>${escapeHtml(p.prospect_industry)}</td>
+      <td>${formatDate(p.first_contact)}</td>
+      <td>${p.total_messages}</td>
+      <td>${p.funnel_stage}</td>
+      <td><span class="status ${stageClass}">${p.outcome}</span></td>
+      <td>${p.deal_value ? formatCurrency(p.deal_value) : '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderFunnelBreakdown() {
+  const f = state.summary.funnel;
+  if (!f) return;
+  const items = [
+    {label:'Total Outreach',value:f.total_outreach,pct:100},
+    {label:'Positive Replies',value:f.positive_replies,pct:f.positive_rate},
+    {label:'Meetings Booked',value:f.meetings_booked,pct:f.meeting_booking_rate},
+    {label:'Proposals Sent',value:f.proposals_sent,pct:f.proposal_rate},
+    {label:'Closed Won',value:f.closed_won,pct:f.close_rate},
+  ];
+  document.getElementById('funnelBreakdown').innerHTML = items.map(item => `
+    <div style="margin-bottom:12px">
+      <div class="flex-between">
+        <span>${item.label}</span>
+        <span><strong>${item.value}</strong> (${item.pct}%)</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${item.pct}%;background:${
+          item.pct > 50 ? '#48bb78' : item.pct > 20 ? '#ecc94b' : '#fc8181'
+        }"></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderOutcomeChart() {
+  const p = state.summary.pipeline;
+  if (!p || !p.outcomes) return;
+  const outcomes = p.outcomes;
+  const ctx = document.getElementById('outcomeChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'pie',
+    data: {
+      labels: Object.keys(outcomes),
+      datasets: [{
+        data: Object.values(outcomes),
+        backgroundColor: ['#48bb78','#fc8181','#63b3ed','#ecc94b','#a0aec0','#764ba2'],
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{position:'bottom',labels:{color:'#888'}}}
+    }
+  });
+}
+
+function renderIndustryTable() {
+  const seg = state.segments?.segments;
+  if (!seg?.industries) return;
+  const inds = Object.entries(seg.industries).sort((a,b) => b[1].meeting_rate - a[1].meeting_rate);
+  document.getElementById('industryTable').innerHTML = inds.map(([name,data]) => `
+    <tr>
+      <td><strong>${escapeHtml(name)}</strong></td>
+      <td>${data.count}</td>
+      <td>${data.positive_rate}%</td>
+      <td>${data.meeting_rate}%</td>
+      <td>${((data.won/data.count)*100||0).toFixed(1)}%</td>
+      <td>${((data.positive_rate*0.2)+(data.meeting_rate*0.3)+((data.won/data.count||0)*30)).toFixed(1)}</td>
+    </tr>`).join('');
+}
+
+function renderIndustryChart() {
+  const rankings = state.segments?.segments?.industry_ranking || [];
+  if (!rankings.length) return;
+  const top = rankings.slice(0,8);
+  const ctx = document.getElementById('industryChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels: top.map(r => r.industry),
+      datasets: [{
+        label: 'Score',
+        data: top.map(r => r.score),
+        backgroundColor: 'rgba(102,126,234,0.2)',
+        borderColor: '#667eea',
+        pointBackgroundColor: '#667eea',
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {r:{grid:{color:'#2a2a4a'},ticks:{color:'#888',backdropColor:'transparent'}}},
+      plugins: {legend:{display:false}}
+    }
+  });
+}
+
+function renderRoleTable() {
+  const roles = state.segments?.segments?.roles || {};
+  const sorted = Object.entries(roles).sort((a,b) => b[1].meeting_rate - a[1].meeting_rate);
+  document.getElementById('roleTable').innerHTML = sorted.map(([role,data]) => `
+    <tr>
+      <td>${escapeHtml(role)}</td>
+      <td>${data.count}</td>
+      <td>${data.positive_rate}%</td>
+      <td>${data.meeting_rate}%</td>
+    </tr>`).join('');
+}
+
+function renderLocationTable() {
+  const locs = state.segments?.segments?.locations || {};
+  const sorted = Object.entries(locs).sort((a,b) => b[1].meeting_rate - a[1].meeting_rate);
+  document.getElementById('locationTable').innerHTML = sorted.map(([loc,data]) => {
+    const rec = data.meeting_rate > 20 ? 'PRIORITY' : data.meeting_rate > 10 ? 'EXPLORE' : 'MONITOR';
+    const cls = rec === 'PRIORITY' ? 'status-won' : rec === 'EXPLORE' ? 'status-meeting' : 'status-open';
+    return `<tr>
+      <td>${escapeHtml(loc)}</td>
+      <td>${data.count}</td>
+      <td>${data.meeting_rate}%</td>
+      <td><span class="status ${cls}">${rec}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAdvancedMetrics() {
+  const m = state.metrics?.metrics;
+  if (!m) return;
+  const items = [
+    {value:m.reply_rate+'%',label:'Reply Rate'},
+    {value:m.avg_sales_cycle_days+'d',label:'Avg Sales Cycle'},
+    {value:formatCurrency(m.avg_deal_value),label:'Avg Deal Value'},
+    {value:formatCurrency(m.total_revenue),label:'Total Revenue'},
+    {value:formatCurrency(m.estimated_cac),label:'Est. CAC'},
+    {value:formatCurrency(m.estimated_ltv),label:'Est. LTV'},
+  ];
+  document.getElementById('advancedMetricsGrid').innerHTML = items.map(i => `
+    <div class="metric">
+      <div class="value">${i.value}</div>
+      <div class="label">${i.label}</div>
+    </div>`).join('');
+}
+
+function renderTouchChart() {
+  const touches = state.metrics?.metrics?.touch_response_rates || {};
+  const labels = Object.keys(touches).map(k => k.replace('_',' '));
+  const posRates = Object.values(touches).map(t => t.positive_rate);
+  const meetRates = Object.values(touches).map(t => t.meeting_rate);
+  const ctx = document.getElementById('touchChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {label:'Positive Rate',data:posRates,borderColor:'#48bb78',backgroundColor:'transparent',tension:0.3},
+        {label:'Meeting Rate',data:meetRates,borderColor:'#63b3ed',backgroundColor:'transparent',tension:0.3},
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{labels:{color:'#888'}}},
+      scales: {y:{beginAtZero:true,grid:{color:'#2a2a4a'}},x:{grid:{display:false}}}
+    }
+  });
+}
+
+function renderPersonalizationChart() {
+  const pers = state.metrics?.metrics?.personalization_impact || {};
+  const labels = Object.keys(pers).map(k => k.replace(/_/g,' '));
+  const posRates = Object.values(pers).map(p => p.positive_rate);
+  const meetRates = Object.values(pers).map(p => p.meeting_rate);
+  const closeRates = Object.values(pers).map(p => p.close_rate);
+  const ctx = document.getElementById('personalizationChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Positive Rate',data:posRates,backgroundColor:'#48bb78',borderRadius:4},
+        {label:'Meeting Rate',data:meetRates,backgroundColor:'#63b3ed',borderRadius:4},
+        {label:'Close Rate',data:closeRates,backgroundColor:'#667eea',borderRadius:4},
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{labels:{color:'#888',font:{size:11}}}},
+      scales: {y:{beginAtZero:true,grid:{color:'#2a2a4a'}},x:{grid:{display:false}}}
+    }
+  });
+}
+
+function renderEfficiencyMetrics() {
+  const m = state.metrics?.metrics;
+  if (!m) return;
+  const items = [
+    {value:m.avg_followups_per_conversation,label:'Avg Follow-ups'},
+    {value:m.avg_followups_won,label:'Follow-ups (Won)'},
+    {value:m.ltv_cac_ratio+'x',label:'LTV:CAC Ratio'},
+  ];
+  document.getElementById('efficiencyMetrics').innerHTML = items.map(i => `
+    <div class="metric">
+      <div class="value">${i.value}</div>
+      <div class="label">${i.label}</div>
+    </div>`).join('');
+}
+
+function renderWinningPatterns() {
+  const patterns = state.campaigns?.campaigns?.winning_patterns || [];
+  document.getElementById('winningPatterns').innerHTML = patterns.map(p => {
+    const cls = p.verdict === 'WINNING' ? 'winning' : p.verdict === 'LOSING' ? 'critical' : 'warning';
+    return `<div class="insight ${cls}">
+      <div class="label">${p.pattern} — <strong>${p.verdict}</strong> (${p.impact_ratio}x impact)</div>
+      <div class="text">Used in ${p.positive_usage}% of positive vs ${p.negative_usage}% of negative campaigns</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCTAChart() {
+  const patterns = state.campaigns?.campaigns?.winning_patterns || [];
+  const ctx = document.getElementById('ctaChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: patterns.map(p => p.pattern.substring(0,30)),
+      datasets: [
+        {label:'Positive Usage %',data:patterns.map(p => p.positive_usage),backgroundColor:'#48bb78',borderRadius:4},
+        {label:'Negative Usage %',data:patterns.map(p => p.negative_usage),backgroundColor:'#fc8181',borderRadius:4},
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {legend:{labels:{color:'#888',font:{size:11}}}},
+      scales: {x:{beginAtZero:true,grid:{color:'#2a2a4a'}},y:{grid:{display:false}}}
+    }
+  });
+}
+
+function renderCampaignDetails() {
+  const camps = state.campaigns?.campaigns;
+  if (!camps) return;
+  const pos = camps.positive_campaigns;
+  const neg = camps.negative_campaigns;
+  document.getElementById('campaignDetails').innerHTML = `
+    <div>
+      <h3>Winning Campaign Subject Words</h3>
+      <div>${Object.entries(pos?.top_subject_words||{}).slice(0,15).map(([w,c]) => `<span style="display:inline-block;padding:2px 8px;background:#22543d;color:#48bb78;border-radius:4px;margin:2px;font-size:12px">${w} (${c})</span>`).join('')||'N/A'}</div>
+    </div>
+    <div>
+      <h3>Low-Performing Subject Words</h3>
+      <div>${Object.entries(neg?.top_subject_words||{}).slice(0,15).map(([w,c]) => `<span style="display:inline-block;padding:2px 8px;background:#522224;color:#fc8181;border-radius:4px;margin:2px;font-size:12px">${w} (${c})</span>`).join('')||'N/A'}</div>
+    </div>`;
+}
+
+function renderSignalCards() {
+  const signals = state.signals?.signals || {};
+  const signalLabels = {
+    funding:'💰 Funding Round',
+    hiring:'👥 Hiring Activity',
+    expansion:'🌍 Expansion Plans',
+    influencer_budget:'📊 Influencer Budget',
+    product_launch:'🚀 Product Launch',
+    team_growth:'📈 Team Growth',
+    agency_dissatisfaction:'🔀 Agency Switching',
+    competitive_pressure:'⚡ Competitive Pressure',
+  };
+  document.getElementById('signalCards').innerHTML = Object.entries(signals).filter(([k]) => k !== 'missed_opportunities').map(([k,v]) => `
+    <div class="metric">
+      <div class="value">${v.count}</div>
+      <div class="label">${signalLabels[k]||k}</div>
+    </div>`).join('');
+}
+
+function renderMissedOpportunities() {
+  const missed = state.signals?.signals?.missed_opportunities?.items || [];
+  document.getElementById('missedOpportunities').innerHTML = missed.length ?
+    missed.map(m => `<div class="insight warning">
+      <div class="label">Missed Opportunity</div>
+      <div class="text"><strong>${escapeHtml(m.prospect_name||'Unknown')}</strong> (${escapeHtml(m.prospect_company||'')}) — ${m.reason}</div>
+    </div>`).join('') :
+    '<p style="color:#888">No missed opportunities detected</p>';
+}
+
+function renderForecastScenarios() {
+  const scenarios = state.forecast?.scenarios || {};
+  const labels = {conservative:'Conservative',realistic:'Realistic',aggressive:'Aggressive'};
+  const colors = {conservative:'#ecc94b',realistic:'#48bb78',aggressive:'#667eea'};
+  document.getElementById('forecastScenarios').innerHTML = Object.entries(scenarios).map(([k,s]) => `
+    <div class="card" style="border-color:${colors[k]}">
+      <h3 style="color:${colors[k]}">${labels[k]}</h3>
+      <div class="metric-row" style="grid-template-columns:1fr 1fr">
+        <div class="metric"><div class="value">${s.monthly_outreach}</div><div class="label">Monthly Outreach</div></div>
+        <div class="metric"><div class="value">${formatCurrency(s.monthly_revenue)}</div><div class="label">Monthly Revenue</div></div>
+        <div class="metric"><div class="value">${formatCurrency(s.mrr)}</div><div class="label">MRR</div></div>
+        <div class="metric"><div class="value">${formatCurrency(s.annualized_revenue)}</div><div class="label">Annualized</div></div>
+      </div>
+    </div>`).join('');
+}
+
+function renderProjectionTable() {
+  const proj = state.forecast?.projections || [];
+  document.getElementById('projectionTable').innerHTML = proj.map(p => `
+    <tr>
+      <td><strong>${formatCurrency(p.target_mrr)}/mo</strong></td>
+      <td>${p.clients_needed}</td>
+      <td>${p.meetings_needed.toLocaleString()}</td>
+      <td>${p.replies_needed.toLocaleString()}</td>
+      <td>${p.outreach_needed.toLocaleString()}</td>
+    </tr>`).join('');
+}
+
+function renderBottlenecks() {
+  const bottlenecks = state.forecast?.bottlenecks || [];
+  document.getElementById('bottlenecks').innerHTML = bottlenecks.map(b => {
+    const cls = b.severity === 'critical' ? 'critical' : b.severity === 'high' ? 'warning' : '';
+    return `<div class="insight ${cls}">
+      <div class="label">${b.area} (${b.severity})</div>
+      <div class="text"><strong>Current:</strong> ${b.current} | <strong>Target:</strong> ${b.target}</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">${b.fix}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBottleneckChart() {
+  const impacts = state.forecast?.bottleneck_revenue_impact || [];
+  if (!impacts.length) return;
+  const ctx = document.getElementById('bottleneckChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: impacts.map(i => i.bottleneck),
+      datasets: [{
+        label: 'Annual Revenue Impact',
+        data: impacts.map(i => i.annual_revenue_impact),
+        backgroundColor: impacts.map(i => i.effort === 'low' ? '#48bb78' : i.effort === 'medium' ? '#ecc94b' : '#fc8181'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{display:false}},
+      scales: {
+        y:{beginAtZero:true,grid:{color:'#2a2a4a'},ticks:{callback:v=>'$'+v/1000+'K'}},
+        x:{grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderSequenceChart() {
+  const seq = state.followups?.followups?.sequence_performance || {};
+  const labels = Object.keys(seq);
+  const meetingRates = Object.values(seq).map(s => s.meeting_rate);
+  const closeRates = Object.values(seq).map(s => s.close_rate);
+  const ctx = document.getElementById('sequenceChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Meeting Rate',data:meetingRates,backgroundColor:'#63b3ed',borderRadius:4},
+        {label:'Close Rate',data:closeRates,backgroundColor:'#667eea',borderRadius:4},
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {legend:{labels:{color:'#888',font:{size:11}}}},
+      scales: {y:{beginAtZero:true,grid:{color:'#2a2a4a'}},x:{grid:{display:false}}}
+    }
+  });
+}
+
+function renderFollowupStrategy() {
+  const fu = state.followups?.followups;
+  if (!fu) return;
+  const optimal = fu.optimal_sequence_length || {};
+  const spacing = fu.optimal_spacing || {};
+  document.getElementById('followupStrategy').innerHTML = `
+    <div class="insight winning">
+      <div class="label">Optimal Sequence Length</div>
+      <div class="text"><strong>${optimal.length} touches</strong> — ${optimal.reasoning}</div>
+    </div>
+    <div class="insight">
+      <div class="label">Recommended Follow-up Spacing</div>
+      <div class="text">Every <strong>${spacing.recommended_spacing_days||3} days</strong> (avg: ${spacing.average_days_between_touches||3}d)</div>
+    </div>
+    <div class="insight warning">
+      <div class="label">Strategy Note</div>
+      <div class="text">${spacing.note||'Adjust based on prospect engagement signals'}</div>
+    </div>`;
+}
+
+function renderMessagingByTouch() {
+  const msg = state.followups?.followups?.messaging_strategy || {};
+  document.getElementById('messagingByTouch').innerHTML = Object.entries(msg).map(([touch,text]) => `
+    <div class="insight">
+      <div class="label">${touch.replace(/_/g,' ')}</div>
+      <div class="text">${text}</div>
+    </div>`).join('');
+}
+
+function renderExecutiveReport() {
+  const r = state.report;
+  if (!r) return;
+  const sections = ['competitive_advantage'];
+  document.getElementById('executiveReport').innerHTML = sections.map(s => r[s] ? `
+    <div class="insight" style="margin-bottom:12px">
+      <div class="label">${s.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>
+      <div class="text">${r[s]}</div>
+    </div>` : '').join('');
+}
+
+function renderRecommendations() {
+  const recs = state.report?.recommendations || [];
+  document.getElementById('recommendations').innerHTML = recs.map(r => `
+    <div class="insight">
+      <div class="text">${r}</div>
+    </div>`).join('');
+}
+
+function renderQuickWins() {
+  const wins = state.report?.quick_wins || [];
+  document.getElementById('quickWins').innerHTML = wins.map(w => `
+    <div class="insight winning">
+      <div class="text">⚡ ${w}</div>
+    </div>`).join('');
+}
+
+function renderNichePriorities() {
+  const niches = state.report?.niche_priorities || [];
+  document.getElementById('nichePriorities').innerHTML = niches.map(n => {
+    const cls = n.priority === 'high' ? 'winning' : n.priority === 'medium' ? 'warning' : '';
+    return `<div class="insight ${cls}">
+      <div class="flex-between">
+        <span class="text"><strong>#${n.rank}: ${escapeHtml(n.niche)}</strong> (Score: ${n.score})</span>
+        <span class="status ${n.priority === 'high' ? 'status-won' : n.priority === 'medium' ? 'status-meeting' : 'status-open'}">${n.priority.toUpperCase()}</span>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Meeting Rate: ${n.meeting_rate}% · Close Rate: ${n.close_rate}%</div>
+    </div>`;
+  }).join('');
+}
+
+function renderHighImpactChanges() {
+  const changes = state.report?.highest_impact_changes || [];
+  document.getElementById('highImpactChanges').innerHTML = changes.map(c => `
+    <div class="insight ${c.roi_quality === 'HIGH' ? 'winning' : 'warning'}">
+      <div class="flex-between">
+        <span class="text"><strong>${c.change}</strong></span>
+        <span class="status ${c.roi_quality === 'HIGH' ? 'status-won' : 'status-meeting'}">${c.roi_quality}</span>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:4px">
+        Annual Impact: ${formatCurrency(c.annual_revenue_impact)} · Effort: ${c.effort}
+      </div>
+    </div>`).join('');
+}
+
+// ============ UTILITY ============
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+  } catch(e) { return dateStr; }
+}
+
+// Auto-load on page load
+document.addEventListener('DOMContentLoaded', () => {
+  // Fallback: if still loading after 20s, show a hint
+  const loadTimeout = setTimeout(() => {
+    const d = document.getElementById('loadingDetail');
+    if (d) d.textContent = 'Still connecting... check that demo data is loaded (click "Load Demo Data" above)';
+  }, 20000);
+
+  // Try loading data immediately; if empty, show demo prompt
+  loadAll().then(() => clearTimeout(loadTimeout)).catch(() => {
+    clearTimeout(loadTimeout);
+    document.getElementById('loading').innerHTML = `
+      <div class="spinner"></div>
+      <p>Click <strong>"Load Demo Data"</strong> to generate sample analytics</p>`;
+  });
+});
+</script>
+</body>
+</html>
