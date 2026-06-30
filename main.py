@@ -40,6 +40,43 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Could not load exports from MongoDB: {e}")
     logger.info("Database initialized")
+
+    # Auto-generate demo data + export if MongoDB is empty (fresh deploy)
+    try:
+        from mongo_db import is_available, get_export_records
+        if is_available() and not get_export_records():
+            logger.info("No exports in MongoDB — generating demo data in background")
+            def _seed():
+                import time
+                time.sleep(3)
+                from demo_data import generate_demo_data
+                generate_demo_data()
+                from gmail_exporter import export_demo_data, cleanup_export_files
+                from mongo_db import save_export_file_stream, save_export_record
+                from gmail_client import load_exports_from_mongodb
+                stats = export_demo_data()
+                if stats and stats.get("files_created"):
+                    export_files = []
+                    for fpath in stats["files_created"]:
+                        if os.path.exists(fpath):
+                            fname = os.path.basename(fpath)
+                            file_meta = save_export_file_stream("demo@agency.com", fname, fpath)
+                            export_files.append(file_meta)
+                    if export_files and all(f.get("file_id") for f in export_files):
+                        save_export_record("demo@agency.com", {
+                            "user_email": "demo@agency.com",
+                            "demo": True,
+                            "status": "complete",
+                            "stats": stats,
+                            "files": export_files,
+                        })
+                        cleanup_export_files(stats)
+                        logger.info("Demo export saved to MongoDB on startup")
+                        load_exports_from_mongodb()
+            threading.Thread(target=_seed, daemon=True).start()
+    except Exception as e:
+        logger.warning(f"Auto-seed skipped: {e}")
+
     yield
 
 
