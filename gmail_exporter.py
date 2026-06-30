@@ -358,7 +358,7 @@ def export_all_to_txt(service, max_messages: int = None, max_threads: int = None
     if progress_callback:
         progress_callback("Fetching messages...", 0, total_display, "")
 
-    # ── 1. Export ALL individual messages ──
+    # ── 1. Export ALL individual messages (streamed to disk) ──
     print("[export] Fetching all messages...")
     msg_refs = fetch_all_messages(service, max_results=max_messages)
     stats["messages_fetched"] = len(msg_refs)
@@ -367,71 +367,59 @@ def export_all_to_txt(service, max_messages: int = None, max_threads: int = None
     if progress_callback:
         progress_callback("Messages fetched", 0, len(msg_refs), f"Found {len(msg_refs)} messages")
 
-    all_msg_lines = []
-    all_msg_lines.append(f"GMAIL COMPLETE MESSAGE EXPORT")
-    all_msg_lines.append(f"Generated: {datetime.now().isoformat()}")
-    all_msg_lines.append(f"Total Messages: {len(msg_refs)}")
-    all_msg_lines.append("=" * 70)
-    all_msg_lines.append("")
-
+    msg_path = os.path.join(export_dir, f"all_messages_{timestamp}.txt")
     exported_count = 0
-    for i, msg_ref in enumerate(msg_refs):
-        if (i + 1) % 50 == 0 or i == len(msg_refs) - 1:
-            print(f"[export] Progress: {i+1}/{len(msg_refs)} messages...")
-            if progress_callback:
-                progress_callback("Exporting messages...", i + 1, len(msg_refs), f"{i+1}/{len(msg_refs)}")
-        full = fetch_full_message(service, msg_ref["id"])
-        if not full:
-            continue
-        formatted = format_message_for_export(full)
-        all_msg_lines.append(formatted)
-        exported_count += 1
+    with open(msg_path, "w", encoding="utf-8") as f:
+        f.write(f"GMAIL COMPLETE MESSAGE EXPORT\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write(f"Total Messages: {len(msg_refs)}\n")
+        f.write("=" * 70 + "\n\n")
+        for i, msg_ref in enumerate(msg_refs):
+            if (i + 1) % 50 == 0 or i == len(msg_refs) - 1:
+                print(f"[export] Progress: {i+1}/{len(msg_refs)} messages...")
+                if progress_callback:
+                    progress_callback("Exporting messages...", i + 1, len(msg_refs), f"{i+1}/{len(msg_refs)}")
+            full = fetch_full_message(service, msg_ref["id"])
+            if not full:
+                continue
+            formatted = format_message_for_export(full)
+            f.write(formatted)
+            exported_count += 1
 
     stats["messages_exported"] = exported_count
-
-    msg_path = os.path.join(export_dir, f"all_messages_{timestamp}.txt")
-    msg_content = "\n".join(all_msg_lines)
-    with open(msg_path, "w", encoding="utf-8") as f:
-        f.write(msg_content)
     stats["total_size_bytes"] += os.path.getsize(msg_path)
     stats["files_created"].append(msg_path)
     print(f"[export] Messages saved: {msg_path} ({os.path.getsize(msg_path)} bytes)")
 
-    # ── 2. Export ALL threads ──
+    # ── 2. Export ALL threads (streamed to disk) ──
     print("[export] Fetching all threads...")
     thread_refs = fetch_threads(service, max_threads=max_threads)
     stats["threads_fetched"] = len(thread_refs)
     print(f"[export] Found {len(thread_refs)} threads. Fetching full data...")
 
-    all_thread_lines = []
-    all_thread_lines.append(f"GMAIL COMPLETE THREAD EXPORT")
-    all_thread_lines.append(f"Generated: {datetime.now().isoformat()}")
-    all_thread_lines.append(f"Total Threads: {len(thread_refs)}")
-    all_thread_lines.append("=" * 70)
-    all_thread_lines.append("")
-
     if progress_callback:
         progress_callback("Fetching threads...", 0, max_threads, "")
 
+    thread_path = os.path.join(export_dir, f"all_threads_{timestamp}.txt")
     thread_exported = 0
-    for i, t_ref in enumerate(thread_refs):
-        if (i + 1) % 50 == 0 or i == len(thread_refs) - 1:
-            print(f"[export] Thread progress: {i+1}/{len(thread_refs)}...")
-            if progress_callback:
-                progress_callback("Exporting threads...", i + 1, len(thread_refs), f"{i+1}/{len(thread_refs)}")
-        full = fetch_full_thread(service, t_ref["id"])
-        if not full:
-            continue
-        formatted = format_thread_for_export(full)
-        all_thread_lines.append(formatted)
-        thread_exported += 1
+    with open(thread_path, "w", encoding="utf-8") as f:
+        f.write(f"GMAIL COMPLETE THREAD EXPORT\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write(f"Total Threads: {len(thread_refs)}\n")
+        f.write("=" * 70 + "\n\n")
+        for i, t_ref in enumerate(thread_refs):
+            if (i + 1) % 50 == 0 or i == len(thread_refs) - 1:
+                print(f"[export] Thread progress: {i+1}/{len(thread_refs)}...")
+                if progress_callback:
+                    progress_callback("Exporting threads...", i + 1, len(thread_refs), f"{i+1}/{len(thread_refs)}")
+            full = fetch_full_thread(service, t_ref["id"])
+            if not full:
+                continue
+            formatted = format_thread_for_export(full)
+            f.write(formatted)
+            thread_exported += 1
 
     stats["threads_exported"] = thread_exported
-
-    thread_path = os.path.join(export_dir, f"all_threads_{timestamp}.txt")
-    thread_content = "\n".join(all_thread_lines)
-    with open(thread_path, "w", encoding="utf-8") as f:
-        f.write(thread_content)
     stats["total_size_bytes"] += os.path.getsize(thread_path)
     stats["files_created"].append(thread_path)
     print(f"[export] Threads saved: {thread_path} ({os.path.getsize(thread_path)} bytes)")
@@ -520,171 +508,162 @@ def export_demo_data(max_messages: int = 100, max_threads: int = 30, user_id: st
 
     import random
 
-    all_msg_lines = []
-    all_msg_lines.append(f"GMAIL COMPLETE MESSAGE EXPORT (DEMO)")
-    all_msg_lines.append(f"Generated: {datetime.now().isoformat()}")
-    all_msg_lines.append(f"Total Messages: {max_messages}")
-    all_msg_lines.append("=" * 70)
-    all_msg_lines.append("")
+    msg_path = os.path.join(export_dir, f"all_messages_demo_{timestamp}.txt")
+    with open(msg_path, "w", encoding="utf-8") as f:
+        f.write(f"GMAIL COMPLETE MESSAGE EXPORT (DEMO)\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write(f"Total Messages: {max_messages}\n")
+        f.write("=" * 70 + "\n\n")
 
-    for i in range(1, max_messages + 1):
-        sender_name, sender_email = random.choice(demo_senders)
-        subject = random.choice(demo_subjects)
-        is_reply = random.random() < 0.35
-        labels = random.choice([
-            ["INBOX"], ["SENT"], ["INBOX", "IMPORTANT"],
-            ["SPAM"], ["TRASH"], ["SENT", "IMPORTANT"],
-            ["INBOX", "UNREAD"], ["STARRED"],
-        ])
-
-        if is_reply:
-            receiver_name, receiver_email = sender_name, sender_email
+        for i in range(1, max_messages + 1):
             sender_name, sender_email = random.choice(demo_senders)
-            subject = "Re: " + subject
-        else:
-            receiver_name = "You"
-            receiver_email = "you@gmail.com"
+            subject = random.choice(demo_subjects)
+            is_reply = random.random() < 0.35
+            labels = random.choice([
+                ["INBOX"], ["SENT"], ["INBOX", "IMPORTANT"],
+                ["SPAM"], ["TRASH"], ["SENT", "IMPORTANT"],
+                ["INBOX", "UNREAD"], ["STARRED"],
+            ])
 
-        ts = int(datetime(2026, 1, 1).timestamp() + i * 3600 * random.uniform(0.5, 4)) * 1000
-        date_obj = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
-        date_str = date_obj.strftime("%Y-%m-%d %H:%M:%S UTC")
+            if is_reply:
+                receiver_name, receiver_email = sender_name, sender_email
+                sender_name, sender_email = random.choice(demo_senders)
+                subject = "Re: " + subject
+            else:
+                receiver_name = "You"
+                receiver_email = "you@gmail.com"
 
-        body_lines_demo = [
-            f"Hi there,",
-            "",
-            f"This is an automated demo email for testing the export feature.",
-            f"Message #{i} - {subject}",
-            "",
-            f"From: {sender_name} <{sender_email}>",
-            f"To: {receiver_name} <{receiver_email}>",
-            f"Date: {date_str}",
-            "",
-            "This is a sample email body used for demonstration purposes.",
-            "In a real export, this would contain the actual email content.",
-            "",
-            "Best regards,",
-            sender_name,
-        ]
-        body_text = "\n".join(body_lines_demo)
+            ts = int(datetime(2026, 1, 1).timestamp() + i * 3600 * random.uniform(0.5, 4)) * 1000
+            date_obj = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+            date_str = date_obj.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        lines = []
-        lines.append(f"  ┌─ MESSAGE ID: demo_msg_{i:06d}")
-        lines.append(f"  │  Thread:       demo_thread_{random.randint(1, max_threads):04d}")
-        lines.append(f"  │  Date:         {date_str}")
-        lines.append(f"  │  Labels:       {', '.join(labels)}")
-        lines.append(f"  │  Size:         {random.randint(1000, 50000)} bytes")
-        lines.append(f"  │")
-        lines.append(f"  │  From:         {sender_name} <{sender_email}>")
-        lines.append(f"  │  To:           {receiver_name} <{receiver_email}>")
-        lines.append(f"  │  Subject:      {subject}")
-        lines.append(f"  │  CC:           {(random.choice(demo_senders)[1] + ', ' + random.choice(demo_senders)[1]) if random.random() < 0.2 else '(none)'}")
-        lines.append(f"  │  BCC:          (none)")
-        lines.append(f"  │  Reply-To:     {sender_email}")
-        lines.append(f"  │  Message-ID:   <demo_msg_{i:06d}@demo.local>")
-        lines.append(f"  │  In-Reply-To:  {('<demo_msg_' + str(i-1).zfill(6) + '@demo.local>') if is_reply else '(none)'}")
-        lines.append(f"  │  References:   {('<demo_msg_' + str(i-1).zfill(6) + '@demo.local>') if is_reply else '(none)'}")
-        lines.append(f"  │  Return-Path:  <{sender_email}>")
-        lines.append(f"  │  Received-SPF: pass (google.com: domain of {sender_email} designates 209.85.220.41 as permitted sender)")
-        dkim_domain = sender_email.split('@')[1] if '@' in sender_email else 'unknown.com'
-        lines.append(f"  │  DKIM:         d={dkim_domain} s=google t={int(ts/1000)}")
-        lines.append(f"  │  Authentication-Results: mx.google.com; spf=pass smtp.mailfrom={sender_email}; dkim=pass")
-        lines.append(f"  │")
-        lines.append(f"  │  List-Unsubscribe: <mailto:unsubscribe@{dkim_domain}>")
-        lines.append(f"  │  X-Priority:   {random.choice(['1 (Highest)', '3 (Normal)', '5 (Lowest)'])}")
-        lines.append(f"  │  X-Mailer:     {random.choice(['Gmail Web', 'Outlook 2026', 'Apple Mail', 'Mozilla Thunderbird', 'ProtonMail'])}")
-        lines.append(f"  │  Content-Type: text/plain; charset=\"UTF-8\"")
-        lines.append(f"  │  MIME-Version: 1.0")
-        lines.append(f"  │")
-        lines.append(f"  │  ── BODY ──")
-        lines.append(f"  │  [text/plain]")
-        for line in body_text.split("\n"):
-            lines.append(f"  │  {line}")
-        lines.append(f"  │")
-        lines.append(f"  └────────────────────────────────────")
-        lines.append("")
+            body_lines_demo = [
+                f"Hi there,",
+                "",
+                f"This is an automated demo email for testing the export feature.",
+                f"Message #{i} - {subject}",
+                "",
+                f"From: {sender_name} <{sender_email}>",
+                f"To: {receiver_name} <{receiver_email}>",
+                f"Date: {date_str}",
+                "",
+                "This is a sample email body used for demonstration purposes.",
+                "In a real export, this would contain the actual email content.",
+                "",
+                "Best regards,",
+                sender_name,
+            ]
+            body_text = "\n".join(body_lines_demo)
 
-        all_msg_lines.append("\n".join(lines))
+            lines = []
+            lines.append(f"  ┌─ MESSAGE ID: demo_msg_{i:06d}")
+            lines.append(f"  │  Thread:       demo_thread_{random.randint(1, max_threads):04d}")
+            lines.append(f"  │  Date:         {date_str}")
+            lines.append(f"  │  Labels:       {', '.join(labels)}")
+            lines.append(f"  │  Size:         {random.randint(1000, 50000)} bytes")
+            lines.append(f"  │")
+            lines.append(f"  │  From:         {sender_name} <{sender_email}>")
+            lines.append(f"  │  To:           {receiver_name} <{receiver_email}>")
+            lines.append(f"  │  Subject:      {subject}")
+            lines.append(f"  │  CC:           {(random.choice(demo_senders)[1] + ', ' + random.choice(demo_senders)[1]) if random.random() < 0.2 else '(none)'}")
+            lines.append(f"  │  BCC:          (none)")
+            lines.append(f"  │  Reply-To:     {sender_email}")
+            lines.append(f"  │  Message-ID:   <demo_msg_{i:06d}@demo.local>")
+            lines.append(f"  │  In-Reply-To:  {('<demo_msg_' + str(i-1).zfill(6) + '@demo.local>') if is_reply else '(none)'}")
+            lines.append(f"  │  References:   {('<demo_msg_' + str(i-1).zfill(6) + '@demo.local>') if is_reply else '(none)'}")
+            lines.append(f"  │  Return-Path:  <{sender_email}>")
+            lines.append(f"  │  Received-SPF: pass (google.com: domain of {sender_email} designates 209.85.220.41 as permitted sender)")
+            dkim_domain = sender_email.split('@')[1] if '@' in sender_email else 'unknown.com'
+            lines.append(f"  │  DKIM:         d={dkim_domain} s=google t={int(ts/1000)}")
+            lines.append(f"  │  Authentication-Results: mx.google.com; spf=pass smtp.mailfrom={sender_email}; dkim=pass")
+            lines.append(f"  │")
+            lines.append(f"  │  List-Unsubscribe: <mailto:unsubscribe@{dkim_domain}>")
+            lines.append(f"  │  X-Priority:   {random.choice(['1 (Highest)', '3 (Normal)', '5 (Lowest)'])}")
+            lines.append(f"  │  X-Mailer:     {random.choice(['Gmail Web', 'Outlook 2026', 'Apple Mail', 'Mozilla Thunderbird', 'ProtonMail'])}")
+            lines.append(f"  │  Content-Type: text/plain; charset=\"UTF-8\"")
+            lines.append(f"  │  MIME-Version: 1.0")
+            lines.append(f"  │")
+            lines.append(f"  │  ── BODY ──")
+            lines.append(f"  │  [text/plain]")
+            for line in body_text.split("\n"):
+                lines.append(f"  │  {line}")
+            lines.append(f"  │")
+            lines.append(f"  └────────────────────────────────────")
+            lines.append("")
+
+            f.write("\n".join(lines))
 
     stats["messages_exported"] = max_messages
     stats["messages_fetched"] = max_messages
-
-    msg_path = os.path.join(export_dir, f"all_messages_demo_{timestamp}.txt")
-    with open(msg_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(all_msg_lines))
     stats["total_size_bytes"] += os.path.getsize(msg_path)
     stats["files_created"].append(msg_path)
 
-    # ── Demo thread data ──
-    all_thread_lines = []
-    all_thread_lines.append(f"GMAIL COMPLETE THREAD EXPORT (DEMO)")
-    all_thread_lines.append(f"Generated: {datetime.now().isoformat()}")
-    all_thread_lines.append(f"Total Threads: {max_threads}")
-    all_thread_lines.append("=" * 70)
-    all_thread_lines.append("")
+    # ── Demo thread data (streamed to disk) ──
+    thread_path = os.path.join(export_dir, f"all_threads_demo_{timestamp}.txt")
+    with open(thread_path, "w", encoding="utf-8") as f:
+        f.write(f"GMAIL COMPLETE THREAD EXPORT (DEMO)\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write(f"Total Threads: {max_threads}\n")
+        f.write("=" * 70 + "\n\n")
 
-    for t in range(1, max_threads + 1):
-        num_msgs_in_thread = random.randint(1, 6)
-        thread_msgs = []
+        for t in range(1, max_threads + 1):
+            num_msgs_in_thread = random.randint(1, 6)
+            thread_msgs = []
 
-        for mi in range(1, num_msgs_in_thread + 1):
-            sender_name_t, sender_email_t = random.choice(demo_senders)
-            receiver_name_t = random.choice(demo_senders)[0]
-            subject_t = random.choice(demo_subjects)
-            if mi > 1:
-                subject_t = "Re: " + subject_t
+            for mi in range(1, num_msgs_in_thread + 1):
                 sender_name_t, sender_email_t = random.choice(demo_senders)
+                receiver_name_t = random.choice(demo_senders)[0]
+                subject_t = random.choice(demo_subjects)
+                if mi > 1:
+                    subject_t = "Re: " + subject_t
+                    sender_name_t, sender_email_t = random.choice(demo_senders)
 
-            ts_t = int(datetime(2026, 1, 1).timestamp() + t * 7200 + mi * 1800) * 1000
-            date_obj_t = datetime.fromtimestamp(ts_t / 1000, tz=timezone.utc)
+                ts_t = int(datetime(2026, 1, 1).timestamp() + t * 7200 + mi * 1800) * 1000
+                date_obj_t = datetime.fromtimestamp(ts_t / 1000, tz=timezone.utc)
 
-            inner = []
-            inner.append(f"  ┌─ MESSAGE ID: demo_threadmsg_{t:04d}_{mi:02d}")
-            inner.append(f"  │  Thread:       demo_thread_{t:04d}")
-            inner.append(f"  │  Date:         {date_obj_t.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-            inner.append(f"  │  Labels:       {'INBOX, SENT' if mi == 1 else 'INBOX'}")
-            inner.append(f"  │  Size:         {random.randint(1500, 35000)} bytes")
-            inner.append(f"  │")
-            inner.append(f"  │  From:         {sender_name_t} <{sender_email_t}>")
-            inner.append(f"  │  To:           {receiver_name_t} <{receiver_name_t.lower().replace(' ', '.')}@company.com>")
-            inner.append(f"  │  Subject:      {subject_t}")
-            inner.append(f"  │  CC:           (none)")
-            inner.append(f"  │  Message-ID:   <demo_threadmsg_{t:04d}_{mi:02d}@demo.local>")
-            inner.append(f"  │  In-Reply-To:  {'<demo_threadmsg_' + str(t).zfill(4) + '_' + str(mi-1).zfill(2) + '@demo.local>' if mi > 1 else '(first message)'}")
-            inner.append(f"  │")
-            inner.append(f"  │  ── BODY ──")
-            inner.append(f"  │  [text/plain]")
-            body_content = [
-                f"Message {mi} in thread {t}.",
-                f"From: {sender_name_t}",
-                f"This is part of a threaded conversation.",
-                "",
-                f"Previous context: {'Yes - replying to message ' + str(mi-1) if mi > 1 else 'This is the first message in the thread.'}"
-            ]
-            for bl in body_content:
-                inner.append(f"  │  {bl}")
-            inner.append(f"  │")
-            inner.append(f"  └────────────────────────────────────")
-            inner.append("")
+                inner = []
+                inner.append(f"  ┌─ MESSAGE ID: demo_threadmsg_{t:04d}_{mi:02d}")
+                inner.append(f"  │  Thread:       demo_thread_{t:04d}")
+                inner.append(f"  │  Date:         {date_obj_t.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                inner.append(f"  │  Labels:       {'INBOX, SENT' if mi == 1 else 'INBOX'}")
+                inner.append(f"  │  Size:         {random.randint(1500, 35000)} bytes")
+                inner.append(f"  │")
+                inner.append(f"  │  From:         {sender_name_t} <{sender_email_t}>")
+                inner.append(f"  │  To:           {receiver_name_t} <{receiver_name_t.lower().replace(' ', '.')}@company.com>")
+                inner.append(f"  │  Subject:      {subject_t}")
+                inner.append(f"  │  CC:           (none)")
+                inner.append(f"  │  Message-ID:   <demo_threadmsg_{t:04d}_{mi:02d}@demo.local>")
+                inner.append(f"  │  In-Reply-To:  {'<demo_threadmsg_' + str(t).zfill(4) + '_' + str(mi-1).zfill(2) + '@demo.local>' if mi > 1 else '(first message)'}")
+                inner.append(f"  │")
+                inner.append(f"  │  ── BODY ──")
+                inner.append(f"  │  [text/plain]")
+                body_content = [
+                    f"Message {mi} in thread {t}.",
+                    f"From: {sender_name_t}",
+                    f"This is part of a threaded conversation.",
+                    "",
+                    f"Previous context: {'Yes - replying to message ' + str(mi-1) if mi > 1 else 'This is the first message in the thread.'}"
+                ]
+                for bl in body_content:
+                    inner.append(f"  │  {bl}")
+                inner.append(f"  │")
+                inner.append(f"  └────────────────────────────────────")
+                inner.append("")
 
-            thread_msgs.append("\n".join(inner))
+                thread_msgs.append("\n".join(inner))
 
-        all_thread_lines.append(f"{'='*70}")
-        all_thread_lines.append(f"THREAD: demo_thread_{t:04d}")
-        all_thread_lines.append(f"Messages: {num_msgs_in_thread}")
-        all_thread_lines.append(f"Snippet: Thread conversation about {random.choice(demo_subjects)}")
-        all_thread_lines.append(f"{'='*70}")
-        all_thread_lines.append("")
+            f.write(f"{'='*70}\n")
+            f.write(f"THREAD: demo_thread_{t:04d}\n")
+            f.write(f"Messages: {num_msgs_in_thread}\n")
+            f.write(f"Snippet: Thread conversation about {random.choice(demo_subjects)}\n")
+            f.write(f"{'='*70}\n\n")
 
-        for mi, msg_content in enumerate(thread_msgs, 1):
-            all_thread_lines.append(f"─── Message {mi} of {num_msgs_in_thread} ───")
-            all_thread_lines.append(msg_content)
+            for mi, msg_content in enumerate(thread_msgs, 1):
+                f.write(f"─── Message {mi} of {num_msgs_in_thread} ───\n")
+                f.write(msg_content)
 
     stats["threads_exported"] = max_threads
     stats["threads_fetched"] = max_threads
-
-    thread_path = os.path.join(export_dir, f"all_threads_demo_{timestamp}.txt")
-    with open(thread_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(all_thread_lines))
     stats["total_size_bytes"] += os.path.getsize(thread_path)
     stats["files_created"].append(thread_path)
 
