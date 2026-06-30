@@ -422,18 +422,20 @@ async def export_demo(
             with open(stats["summary_path"], "r", encoding="utf-8") as f:
                 summary_text = f.read()
 
-        # ── Save demo export to MongoDB ──
+        # ── Save demo export to MongoDB (streamed via GridFS) ──
         try:
-            from mongo_db import save_export_record
+            from mongo_db import save_export_file_stream, save_export_record
             export_files = []
             for fpath in stats.get("files_created", []):
                 if os.path.exists(fpath):
-                    with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
-                        content = fh.read()
+                    fname = os.path.basename(fpath)
+                    file_meta = save_export_file_stream(user_email, fname, fpath)
+                    export_files.append(file_meta)
+                else:
                     export_files.append({
                         "name": os.path.basename(fpath),
-                        "size_bytes": len(content.encode("utf-8")),
-                        "content": content,
+                        "size_bytes": 0,
+                        "file_id": None,
                     })
             export_record = {
                 "user_email": user_email,
@@ -447,15 +449,19 @@ async def export_demo(
                     "threads_fetched": stats.get("threads_fetched", 0),
                     "threads_exported": stats.get("threads_exported", 0),
                     "total_files": len(export_files),
-                    "total_size_bytes": sum(f["size_bytes"] for f in export_files),
+                    "total_size_bytes": stats.get("total_size_bytes", 0),
                 },
                 "files": export_files,
             }
             save_export_record(user_email, export_record)
             logger.info(f"Saved demo export to MongoDB for {user_email}")
-            # Clean up local files now that they're in MongoDB
-            from gmail_exporter import cleanup_export_files
-            cleanup_export_files(stats)
+            # Only clean up local files if ALL were successfully streamed to GridFS
+            all_in_gridfs = all(
+                f.get("file_id") for f in export_files if f.get("size_bytes", 0) > 0
+            )
+            if all_in_gridfs:
+                from gmail_exporter import cleanup_export_files
+                cleanup_export_files(stats)
         except Exception as mge:
             logger.warning(f"Could not save demo export to MongoDB: {mge}")
 
@@ -530,24 +536,20 @@ async def export_live(
                 "summary": summary_text,
             })
 
-            # ── Save export files to MongoDB ──
+            # ── Save export files to MongoDB (streamed via GridFS) ──
             try:
-                from mongo_db import save_export_record
+                from mongo_db import save_export_file_stream, save_export_record
                 export_files = []
                 for fpath in stats.get("files_created", []):
                     if os.path.exists(fpath):
-                        with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
-                            content = fh.read()
-                        export_files.append({
-                            "name": os.path.basename(fpath),
-                            "size_bytes": len(content.encode("utf-8")),
-                            "content": content,
-                        })
+                        fname = os.path.basename(fpath)
+                        file_meta = save_export_file_stream(user_email, fname, fpath)
+                        export_files.append(file_meta)
                     else:
                         export_files.append({
                             "name": os.path.basename(fpath),
                             "size_bytes": 0,
-                            "content": "[file not found]",
+                            "file_id": None,
                         })
                 export_record = {
                     "user_email": user_email,
@@ -560,15 +562,19 @@ async def export_live(
                         "threads_fetched": stats.get("threads_fetched", 0),
                         "threads_exported": stats.get("threads_exported", 0),
                         "total_files": len(export_files),
-                        "total_size_bytes": sum(f["size_bytes"] for f in export_files),
+                        "total_size_bytes": stats.get("total_size_bytes", 0),
                     },
                     "files": export_files,
                 }
                 save_export_record(user_email, export_record)
                 logger.info(f"Saved live export to MongoDB for {user_email}")
-                # Clean up local files now that they're in MongoDB
-                from gmail_exporter import cleanup_export_files
-                cleanup_export_files(stats)
+                # Only clean up local files if ALL were successfully streamed to GridFS
+                all_in_gridfs = all(
+                    f.get("file_id") for f in export_files if f.get("size_bytes", 0) > 0
+                )
+                if all_in_gridfs:
+                    from gmail_exporter import cleanup_export_files
+                    cleanup_export_files(stats)
             except Exception as mge:
                 logger.warning(f"Could not save live export to MongoDB: {mge}")
 
@@ -1088,14 +1094,21 @@ async def admin_export_files(email: str):
         raise HTTPException(status_code=404, detail="No export found for this user")
 
     # Fetch full content from MongoDB (not from memory)
+    from mongo_db import get_export_file
     records = get_export_records(email)
     files_with_content = []
     if records:
         for f in (records[0].get("files") or []):
+            content = f.get("content", "")
+            # If no inline content, fetch from GridFS via file_id
+            if not content and f.get("file_id"):
+                file_data = get_export_file(email, f.get("name", ""))
+                if file_data:
+                    content = file_data.get("content", "")
             files_with_content.append({
                 "name": f.get("name"),
                 "size_bytes": f.get("size_bytes", 0),
-                "content": f.get("content", ""),
+                "content": content,
             })
 
     return {

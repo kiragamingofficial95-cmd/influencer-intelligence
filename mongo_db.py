@@ -190,6 +190,56 @@ def get_session(email: str) -> dict:
         return {}
 
 
+def save_export_file_stream(email: str, filename: str, filepath: str) -> dict:
+    """Stream a file into GridFS in 1MB chunks — never loads the whole file into memory.
+    Returns file metadata dict with a file_id referencing the GridFS object.
+    """
+    if not is_available():
+        return {"name": filename, "size_bytes": 0, "file_id": None}
+    try:
+        _, db = get_client()
+        if db is None:
+            return {"name": filename, "size_bytes": 0, "file_id": None}
+        from gridfs import GridFSBucket
+        bucket = GridFSBucket(db, bucket_name="export_files")
+        file_size = os.path.getsize(filepath)
+        with open(filepath, "rb") as f:
+            grid_in = bucket.open_upload_stream(
+                filename,
+                metadata={"user_email": email, "original_name": filename},
+            )
+            while True:
+                chunk = f.read(1024 * 1024)
+                if not chunk:
+                    break
+                grid_in.write(chunk)
+            grid_in.close()
+        logger.info(f"MongoDB GridFS: saved {filename} ({file_size} bytes) for {email}")
+        return {
+            "name": filename,
+            "size_bytes": file_size,
+            "file_id": str(grid_in.grid_id),
+        }
+    except Exception as e:
+        logger.error(f"MongoDB save_export_file_stream failed: {e}")
+        return {"name": filename, "size_bytes": 0, "file_id": None}
+
+
+def _fill_from_gridfs(db, file_entry: dict) -> dict:
+    """Fetch file content from GridFS for an entry that has a file_id."""
+    try:
+        from gridfs import GridFSBucket
+        from bson.objectid import ObjectId
+        bucket = GridFSBucket(db, bucket_name="export_files")
+        grid_out = bucket.open_download_stream(ObjectId(file_entry["file_id"]))
+        content_bytes = grid_out.read()
+        file_entry["content"] = content_bytes.decode("utf-8", errors="replace")
+    except Exception as e:
+        logger.error(f"MongoDB _fill_from_gridfs failed: {e}")
+        file_entry["content"] = "[error loading file from GridFS]"
+    return file_entry
+
+
 def save_export_record(email: str, export_data: dict):
     """Store a completed export record with file contents for a user.
     Stores one document per user (keyed by email) with all files embedded.
@@ -213,7 +263,9 @@ def save_export_record(email: str, export_data: dict):
 
 
 def get_export_file(email: str, filename: str) -> Optional[dict]:
-    """Retrieve a single file's content from a user's export record."""
+    """Retrieve a single file's content from MongoDB.
+    Handles both inline content and GridFS-backed files.
+    """
     if not is_available():
         return None
     try:
@@ -225,6 +277,8 @@ def get_export_file(email: str, filename: str) -> Optional[dict]:
             return None
         for f in doc.get("files", []):
             if f.get("name") == filename:
+                if f.get("file_id") and not f.get("content"):
+                    return _fill_from_gridfs(db, dict(f))
                 return f
         return None
     except Exception as e:

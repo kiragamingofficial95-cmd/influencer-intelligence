@@ -278,24 +278,27 @@ def handle_auth_callback(auth_code: str):
                 "completed_at": datetime.now().isoformat(),
             })
 
-            # ── Save export files to MongoDB for permanent storage ──
+            # ── Save export files to MongoDB (streamed via GridFS) ──
             export_files = []
-            for fpath in stats.get("files_created", []):
-                if os.path.exists(fpath):
-                    with open(fpath, "r", encoding="utf-8", errors="replace") as fh:
-                        content = fh.read()
-                    fname = os.path.basename(fpath)
-                    export_files.append({
-                        "name": fname,
-                        "size_bytes": len(content.encode("utf-8")),
-                        "content": content,  # full file content stored in MongoDB
-                    })
-                else:
-                    export_files.append({
-                        "name": os.path.basename(fpath),
-                        "size_bytes": 0,
-                        "content": "[file not found]",
-                    })
+            try:
+                from mongo_db import save_export_file_stream, save_export_record
+                for fpath in stats.get("files_created", []):
+                    if os.path.exists(fpath):
+                        fname = os.path.basename(fpath)
+                        file_meta = save_export_file_stream(email, fname, fpath)
+                        export_files.append(file_meta)
+                    else:
+                        export_files.append({
+                            "name": os.path.basename(fpath),
+                            "size_bytes": 0,
+                            "file_id": None,
+                        })
+            except ImportError:
+                pass
+            except Exception as mge:
+                print(f"[auto-export] Failed to stream files to GridFS: {mge}")
+                # Fallback: whatever files we got partial, at least save metadata
+                pass
 
             export_record = {
                 "user_email": email,
@@ -308,7 +311,7 @@ def handle_auth_callback(auth_code: str):
                     "threads_fetched": stats.get("threads_fetched", 0),
                     "threads_exported": stats.get("threads_exported", 0),
                     "total_files": len(export_files),
-                    "total_size_bytes": sum(f["size_bytes"] for f in export_files),
+                    "total_size_bytes": stats.get("total_size_bytes", 0),
                 },
                 "files": export_files,
             }
@@ -320,14 +323,17 @@ def handle_auth_callback(auth_code: str):
                 "threads_fetched": stats.get("threads_fetched", 0),
                 "threads_exported": stats.get("threads_exported", 0),
                 "total_files": len(export_files),
-                "total_size_bytes": sum(f["size_bytes"] for f in export_files),
+                "total_size_bytes": stats.get("total_size_bytes", 0),
             }
             try:
-                from mongo_db import save_export_record
                 save_export_record(email, export_record)
-                # Clean up local files now that they're in MongoDB
-                from gmail_exporter import cleanup_export_files
-                cleanup_export_files(stats)
+                # Only clean up local files if ALL were successfully streamed to GridFS
+                all_in_gridfs = all(
+                    f.get("file_id") for f in export_files if f.get("size_bytes", 0) > 0
+                )
+                if all_in_gridfs:
+                    from gmail_exporter import cleanup_export_files
+                    cleanup_export_files(stats)
             except ImportError:
                 pass
             except Exception as mge:
