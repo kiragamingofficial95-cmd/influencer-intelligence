@@ -9,7 +9,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-MONGO_URI = os.environ.get("MONGODB_URI") or "mongodb://kiragamingofficial95_db_user:kira5y7hhuF@ac-llkkkp9-shard-00-00.4vwcc0e.mongodb.net:27017,ac-llkkkp9-shard-00-01.4vwcc0e.mongodb.net:27017,ac-llkkkp9-shard-00-02.4vwcc0e.mongodb.net:27017/influencer_intel?ssl=true&replicaSet=atlas-p20sqo-shard-0&authSource=admin&appName=Cluster0"
+MONGO_URI = os.environ.get("MONGODB_URI") or "mongodb+srv://kiragamingofficial95_db_user:kira5y7hhuF@cluster0.4vwcc0e.mongodb.net/?appName=Cluster0"
 MONGO_DB_NAME = os.environ.get("MONGODB_DB_NAME", "influencer_intel")
 
 _client = None
@@ -19,15 +19,13 @@ _connection_failed = False
 
 
 def is_available() -> bool:
-    global _connection_failed
     if not _mongo_available and MONGO_URI and not _connection_failed:
         get_client()
-        _connection_failed = not _mongo_available
     return _mongo_available
 
 
 def get_client():
-    global _client, _db, _mongo_available
+    global _client, _db, _mongo_available, _connection_failed
     if _client is not None:
         return _client, _db
     if not MONGO_URI:
@@ -50,6 +48,7 @@ def get_client():
         _client = None
         _db = None
         _mongo_available = False
+        _connection_failed = True
     return _client, _db
 
 
