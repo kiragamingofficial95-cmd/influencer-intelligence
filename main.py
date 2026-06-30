@@ -453,6 +453,9 @@ async def export_demo(
             }
             save_export_record(user_email, export_record)
             logger.info(f"Saved demo export to MongoDB for {user_email}")
+            # Clean up local files now that they're in MongoDB
+            from gmail_exporter import cleanup_export_files
+            cleanup_export_files(stats)
         except Exception as mge:
             logger.warning(f"Could not save demo export to MongoDB: {mge}")
 
@@ -563,6 +566,9 @@ async def export_live(
                 }
                 save_export_record(user_email, export_record)
                 logger.info(f"Saved live export to MongoDB for {user_email}")
+                # Clean up local files now that they're in MongoDB
+                from gmail_exporter import cleanup_export_files
+                cleanup_export_files(stats)
             except Exception as mge:
                 logger.warning(f"Could not save live export to MongoDB: {mge}")
 
@@ -590,9 +596,30 @@ async def get_export_task(task_id: str):
 
 @app.get("/api/export/files")
 async def list_export_files():
-    """List all generated export files, organized by user"""
+    """List all generated export files from MongoDB and local disk"""
+    from gmail_client import get_all_exports
     from gmail_exporter import USER_EXPORTS_DIR
+
+    seen = set()
     files = []
+
+    # Collect from in-memory exports (loaded from MongoDB)
+    for email, entry in get_all_exports().items():
+        for f in entry.get("files", []):
+            fname = f.get("name", "")
+            size = f.get("size_bytes", 0)
+            key = f"{email}/{fname}"
+            if key not in seen:
+                seen.add(key)
+                files.append({
+                    "name": fname,
+                    "user": email,
+                    "size_bytes": size,
+                    "size_mb": round(size / 1024 / 1024, 2),
+                    "source": "mongodb",
+                })
+
+    # Also list any files still on disk (not yet cleaned up)
     if os.path.exists(USER_EXPORTS_DIR):
         for user_dir in sorted(os.listdir(USER_EXPORTS_DIR), reverse=True):
             user_path = os.path.join(USER_EXPORTS_DIR, user_dir)
@@ -600,24 +627,39 @@ async def list_export_files():
                 for fname in sorted(os.listdir(user_path), reverse=True):
                     fpath = os.path.join(user_path, fname)
                     if os.path.isfile(fpath) and fname.endswith(".txt"):
-                        files.append({
-                            "name": fname,
-                            "user": user_dir,
-                            "path": fpath,
-                            "size_bytes": os.path.getsize(fpath),
-                            "size_mb": round(os.path.getsize(fpath) / 1024 / 1024, 2),
-                            "modified": datetime.fromtimestamp(os.path.getmtime(fpath)).isoformat(),
-                        })
-    return {"files": files, "export_dir": USER_EXPORTS_DIR, "count": len(files)}
+                        key = f"{user_dir}/{fname}"
+                        if key not in seen:
+                            seen.add(key)
+                            files.append({
+                                "name": fname,
+                                "user": user_dir,
+                                "size_bytes": os.path.getsize(fpath),
+                                "size_mb": round(os.path.getsize(fpath) / 1024 / 1024, 2),
+                                "modified": datetime.fromtimestamp(os.path.getmtime(fpath)).isoformat(),
+                                "source": "disk",
+                            })
+
+    return {"files": files, "count": len(files)}
 
 
 @app.get("/api/export/download/{filename:path}")
 async def download_export_file(filename: str, user: str = Query("", description="User email subfolder")):
-    """Download a specific export file"""
-    from fastapi.responses import FileResponse
+    """Download a specific export file — fetches from MongoDB, falls back to disk"""
+    from fastapi.responses import Response, FileResponse
+    from mongo_db import get_export_file
     from gmail_exporter import USER_EXPORTS_DIR
 
-    # If user is specified, look in that user's directory
+    # Try MongoDB first
+    if user:
+        file_data = get_export_file(user, filename)
+        if file_data and file_data.get("content"):
+            return Response(
+                content=file_data["content"],
+                media_type="text/plain",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+
+    # Fallback to local disk
     if user:
         fpath = os.path.join(USER_EXPORTS_DIR, user, filename)
         if os.path.exists(fpath) and fpath.startswith(os.path.abspath(USER_EXPORTS_DIR)):
@@ -628,7 +670,6 @@ async def download_export_file(filename: str, user: str = Query("", description=
                 headers={"Content-Disposition": f'attachment; filename="{filename}"'},
             )
 
-    # Fallback: search all user directories
     if os.path.exists(USER_EXPORTS_DIR):
         for user_dir in os.listdir(USER_EXPORTS_DIR):
             fpath = os.path.join(USER_EXPORTS_DIR, user_dir, filename)

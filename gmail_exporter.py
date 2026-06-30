@@ -311,6 +311,28 @@ def format_thread_for_export(thread: Dict) -> str:
     return "\n".join(lines)
 
 
+def cleanup_export_files(stats: Dict):
+    """Remove exported .txt files from disk after they've been stored in MongoDB.
+    Deletes each file and removes the user directory if empty.
+    """
+    for fpath in stats.get("files_created", []):
+        try:
+            if os.path.exists(fpath):
+                os.remove(fpath)
+                print(f"[cleanup] Deleted: {fpath}")
+        except Exception as e:
+            print(f"[cleanup] Error deleting {fpath}: {e}")
+    # Remove user directory if empty
+    export_dir = os.path.dirname(fpath) if stats.get("files_created") else None
+    if export_dir and os.path.isdir(export_dir):
+        try:
+            if not os.listdir(export_dir):
+                os.rmdir(export_dir)
+                print(f"[cleanup] Removed empty directory: {export_dir}")
+        except Exception as e:
+            print(f"[cleanup] Error removing directory {export_dir}: {e}")
+
+
 def export_all_to_txt(service, max_messages: int = None, max_threads: int = None, progress_callback=None, user_id: str = "anonymous") -> Dict:
     """Export ALL emails to organized TXT files. Returns paths and stats.
     

@@ -306,9 +306,22 @@ def handle_auth_callback(auth_code: str):
                 },
                 "files": export_files,
             }
+            # Store files in the in-memory export record for admin panel
+            prog["files"] = export_files
+            prog["stats"] = {
+                "messages_fetched": stats.get("messages_fetched", 0),
+                "messages_exported": stats.get("messages_exported", 0),
+                "threads_fetched": stats.get("threads_fetched", 0),
+                "threads_exported": stats.get("threads_exported", 0),
+                "total_files": len(export_files),
+                "total_size_bytes": sum(f["size_bytes"] for f in export_files),
+            }
             try:
                 from mongo_db import save_export_record
                 save_export_record(email, export_record)
+                # Clean up local files now that they're in MongoDB
+                from gmail_exporter import cleanup_export_files
+                cleanup_export_files(stats)
             except ImportError:
                 pass
             except Exception as mge:

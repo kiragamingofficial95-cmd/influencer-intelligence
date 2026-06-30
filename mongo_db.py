@@ -212,6 +212,26 @@ def save_export_record(email: str, export_data: dict):
         logger.error(f"MongoDB save_export_record failed: {e}")
 
 
+def get_export_file(email: str, filename: str) -> Optional[dict]:
+    """Retrieve a single file's content from a user's export record."""
+    if not is_available():
+        return None
+    try:
+        _, db = get_client()
+        if db is None:
+            return None
+        doc = db.user_exports.find_one({"_id": email}, {"_id": 0, "files": 1})
+        if not doc:
+            return None
+        for f in doc.get("files", []):
+            if f.get("name") == filename:
+                return f
+        return None
+    except Exception as e:
+        logger.error(f"MongoDB get_export_file failed: {e}")
+        return None
+
+
 def get_export_records(email: Optional[str] = None) -> list:
     """Retrieve export records, optionally filtered by email.
     Returns newest-first.
