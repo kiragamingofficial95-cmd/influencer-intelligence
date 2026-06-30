@@ -9,7 +9,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-MONGO_URI = os.environ.get("MONGODB_URI", "")
+MONGO_URI = os.environ.get("MONGODB_URI") or "mongodb+srv://kiragamingofficial95_db_user:ZHUx9YsGY065DjM7@cluster0.4vwcc0e.mongodb.net/influencer_intel?retryWrites=true&w=majority&appName=Cluster0"
 MONGO_DB_NAME = os.environ.get("MONGODB_DB_NAME", "influencer_intel")
 
 _client = None
