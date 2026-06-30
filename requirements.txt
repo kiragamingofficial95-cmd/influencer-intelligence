@@ -16,3 +16,6 @@ nltk==3.9.1
 
 # MongoDB - permanent cloud storage
 pymongo[srv]==4.10.1
+
+# Environment variable loader
+python-dotenv==1.0.1

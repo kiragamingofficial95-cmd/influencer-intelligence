@@ -15,3 +15,7 @@ services:
         sync: false
       - key: REDIRECT_URI
         sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: influencer_intel

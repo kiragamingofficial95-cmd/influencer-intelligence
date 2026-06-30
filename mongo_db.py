@@ -3,6 +3,9 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +32,12 @@ def get_client():
     try:
         from pymongo import MongoClient
         from pymongo.server_api import ServerApi
-        _client = MongoClient(MONGO_URI, server_api=ServerApi('1'), serverSelectionTimeoutMS=5000)
+        _client = MongoClient(
+            MONGO_URI,
+            server_api=ServerApi('1'),
+            serverSelectionTimeoutMS=5000,
+            tlsAllowInvalidCertificates=True,
+        )
         _client.admin.command('ping')
         _db = _client[MONGO_DB_NAME]
         _mongo_available = True

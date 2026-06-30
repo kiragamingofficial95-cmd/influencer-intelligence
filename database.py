@@ -10,7 +10,12 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "agency_intel.db")
 try:
     import mongo_db as mongo
     mongo.get_client()
-except Exception:
+    if mongo.is_available():
+        print("[database] MongoDB connected and available")
+    else:
+        print("[database] MongoDB module loaded but not available (check MONGODB_URI)")
+except Exception as exc:
+    print(f"[database] MongoDB not available: {exc}")
     mongo = None
 
 
