@@ -1077,17 +1077,31 @@ async def admin_export_progress():
 
 @app.get("/api/admin/export-files/{email}")
 async def admin_export_files(email: str):
-    """Admin API - returns full file contents for a user's export."""
+    """Admin API - returns file listings with full content fetched from MongoDB on-demand."""
     from gmail_client import get_all_exports
+    from mongo_db import get_export_records
     _require_admin_api()
-    exports = get_all_exports()
-    entry = exports.get(email)
+
+    # Get metadata from in-memory store
+    entry = get_all_exports().get(email)
     if not entry:
         raise HTTPException(status_code=404, detail="No export found for this user")
+
+    # Fetch full content from MongoDB (not from memory)
+    records = get_export_records(email)
+    files_with_content = []
+    if records:
+        for f in (records[0].get("files") or []):
+            files_with_content.append({
+                "name": f.get("name"),
+                "size_bytes": f.get("size_bytes", 0),
+                "content": f.get("content", ""),
+            })
+
     return {
         "user_email": email,
         "status": entry.get("status"),
-        "files": entry.get("files", []),
+        "files": files_with_content or entry.get("files", []),
         "stats": entry.get("stats", {}),
     }
 

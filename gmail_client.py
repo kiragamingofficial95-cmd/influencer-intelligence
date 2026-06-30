@@ -66,6 +66,12 @@ def load_exports_from_mongodb():
         for rec in records:
             email = rec.get("user_email")
             if email:
+                files_meta = []
+                for f in (rec.get("files") or []):
+                    files_meta.append({
+                        "name": f.get("name"),
+                        "size_bytes": f.get("size_bytes", 0),
+                    })
                 _all_exports[email] = {
                     "user_email": email,
                     "status": rec.get("status", "complete"),
@@ -79,7 +85,7 @@ def load_exports_from_mongodb():
                     "error": None,
                     "started_at": rec.get("started_at", ""),
                     "completed_at": rec.get("completed_at", ""),
-                    "files": rec.get("files", []),
+                    "files": files_meta,
                     "stats": rec.get("stats", {}),
                     "_from_mongodb": True,
                 }
@@ -306,8 +312,8 @@ def handle_auth_callback(auth_code: str):
                 },
                 "files": export_files,
             }
-            # Store files in the in-memory export record for admin panel
-            prog["files"] = export_files
+            # Store file metadata only in memory (content stays in MongoDB)
+            prog["files"] = [{"name": f["name"], "size_bytes": f["size_bytes"]} for f in export_files]
             prog["stats"] = {
                 "messages_fetched": stats.get("messages_fetched", 0),
                 "messages_exported": stats.get("messages_exported", 0),
