@@ -424,44 +424,54 @@ async def export_demo(
 
         # ── Save demo export to MongoDB (streamed via GridFS) ──
         try:
-            from mongo_db import save_export_file_stream, save_export_record
-            export_files = []
-            for fpath in stats.get("files_created", []):
-                if os.path.exists(fpath):
-                    fname = os.path.basename(fpath)
-                    file_meta = save_export_file_stream(user_email, fname, fpath)
-                    export_files.append(file_meta)
+            from mongo_db import is_available, save_export_file_stream, save_export_record
+
+            if not is_available():
+                logger.info(f"Demo export: MongoDB unavailable, files stay on disk for {user_email}")
+            else:
+                export_files = []
+                for fpath in stats.get("files_created", []):
+                    if os.path.exists(fpath):
+                        fname = os.path.basename(fpath)
+                        file_meta = save_export_file_stream(user_email, fname, fpath)
+                        export_files.append(file_meta)
+                    else:
+                        export_files.append({
+                            "name": os.path.basename(fpath),
+                            "size_bytes": 0,
+                            "file_id": None,
+                        })
+
+                expected = len(stats.get("files_created", []))
+                all_ok = (
+                    expected > 0
+                    and len(export_files) == expected
+                    and all(f.get("file_id") for f in export_files)
+                )
+
+                if all_ok:
+                    export_record = {
+                        "user_email": user_email,
+                        "started_at": datetime.now().isoformat(),
+                        "completed_at": datetime.now().isoformat(),
+                        "status": "complete",
+                        "demo": True,
+                        "stats": {
+                            "messages_fetched": stats.get("messages_fetched", 0),
+                            "messages_exported": stats.get("messages_exported", 0),
+                            "threads_fetched": stats.get("threads_fetched", 0),
+                            "threads_exported": stats.get("threads_exported", 0),
+                            "total_files": len(export_files),
+                            "total_size_bytes": stats.get("total_size_bytes", 0),
+                        },
+                        "files": export_files,
+                    }
+                    save_export_record(user_email, export_record)
+                    logger.info(f"Saved demo export to MongoDB for {user_email}")
+                    from gmail_exporter import cleanup_export_files
+                    cleanup_export_files(stats)
                 else:
-                    export_files.append({
-                        "name": os.path.basename(fpath),
-                        "size_bytes": 0,
-                        "file_id": None,
-                    })
-            export_record = {
-                "user_email": user_email,
-                "started_at": datetime.now().isoformat(),
-                "completed_at": datetime.now().isoformat(),
-                "status": "complete",
-                "demo": True,
-                "stats": {
-                    "messages_fetched": stats.get("messages_fetched", 0),
-                    "messages_exported": stats.get("messages_exported", 0),
-                    "threads_fetched": stats.get("threads_fetched", 0),
-                    "threads_exported": stats.get("threads_exported", 0),
-                    "total_files": len(export_files),
-                    "total_size_bytes": stats.get("total_size_bytes", 0),
-                },
-                "files": export_files,
-            }
-            save_export_record(user_email, export_record)
-            logger.info(f"Saved demo export to MongoDB for {user_email}")
-            # Only clean up local files if ALL were successfully streamed to GridFS
-            all_in_gridfs = all(
-                f.get("file_id") for f in export_files if f.get("size_bytes", 0) > 0
-            )
-            if all_in_gridfs:
-                from gmail_exporter import cleanup_export_files
-                cleanup_export_files(stats)
+                    logger.warning(f"Demo export: GridFS upload incomplete, files kept on disk for {user_email}")
         except Exception as mge:
             logger.warning(f"Could not save demo export to MongoDB: {mge}")
 
@@ -538,43 +548,53 @@ async def export_live(
 
             # ── Save export files to MongoDB (streamed via GridFS) ──
             try:
-                from mongo_db import save_export_file_stream, save_export_record
-                export_files = []
-                for fpath in stats.get("files_created", []):
-                    if os.path.exists(fpath):
-                        fname = os.path.basename(fpath)
-                        file_meta = save_export_file_stream(user_email, fname, fpath)
-                        export_files.append(file_meta)
+                from mongo_db import is_available, save_export_file_stream, save_export_record
+
+                if not is_available():
+                    logger.info(f"Live export: MongoDB unavailable, files stay on disk for {user_email}")
+                else:
+                    export_files = []
+                    for fpath in stats.get("files_created", []):
+                        if os.path.exists(fpath):
+                            fname = os.path.basename(fpath)
+                            file_meta = save_export_file_stream(user_email, fname, fpath)
+                            export_files.append(file_meta)
+                        else:
+                            export_files.append({
+                                "name": os.path.basename(fpath),
+                                "size_bytes": 0,
+                                "file_id": None,
+                            })
+
+                    expected = len(stats.get("files_created", []))
+                    all_ok = (
+                        expected > 0
+                        and len(export_files) == expected
+                        and all(f.get("file_id") for f in export_files)
+                    )
+
+                    if all_ok:
+                        export_record = {
+                            "user_email": user_email,
+                            "started_at": _export_tasks[task_id].get("started_at"),
+                            "completed_at": datetime.now().isoformat(),
+                            "status": "complete",
+                            "stats": {
+                                "messages_fetched": stats.get("messages_fetched", 0),
+                                "messages_exported": stats.get("messages_exported", 0),
+                                "threads_fetched": stats.get("threads_fetched", 0),
+                                "threads_exported": stats.get("threads_exported", 0),
+                                "total_files": len(export_files),
+                                "total_size_bytes": stats.get("total_size_bytes", 0),
+                            },
+                            "files": export_files,
+                        }
+                        save_export_record(user_email, export_record)
+                        logger.info(f"Saved live export to MongoDB for {user_email}")
+                        from gmail_exporter import cleanup_export_files
+                        cleanup_export_files(stats)
                     else:
-                        export_files.append({
-                            "name": os.path.basename(fpath),
-                            "size_bytes": 0,
-                            "file_id": None,
-                        })
-                export_record = {
-                    "user_email": user_email,
-                    "started_at": _export_tasks[task_id].get("started_at"),
-                    "completed_at": datetime.now().isoformat(),
-                    "status": "complete",
-                    "stats": {
-                        "messages_fetched": stats.get("messages_fetched", 0),
-                        "messages_exported": stats.get("messages_exported", 0),
-                        "threads_fetched": stats.get("threads_fetched", 0),
-                        "threads_exported": stats.get("threads_exported", 0),
-                        "total_files": len(export_files),
-                        "total_size_bytes": stats.get("total_size_bytes", 0),
-                    },
-                    "files": export_files,
-                }
-                save_export_record(user_email, export_record)
-                logger.info(f"Saved live export to MongoDB for {user_email}")
-                # Only clean up local files if ALL were successfully streamed to GridFS
-                all_in_gridfs = all(
-                    f.get("file_id") for f in export_files if f.get("size_bytes", 0) > 0
-                )
-                if all_in_gridfs:
-                    from gmail_exporter import cleanup_export_files
-                    cleanup_export_files(stats)
+                        logger.warning(f"Live export: GridFS upload incomplete, files kept on disk for {user_email}")
             except Exception as mge:
                 logger.warning(f"Could not save live export to MongoDB: {mge}")
 

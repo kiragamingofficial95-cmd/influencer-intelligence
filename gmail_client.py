@@ -278,66 +278,58 @@ def handle_auth_callback(auth_code: str):
                 "completed_at": datetime.now().isoformat(),
             })
 
-            # ── Save export files to MongoDB (streamed via GridFS) ──
-            export_files = []
-            try:
-                from mongo_db import save_export_file_stream, save_export_record
-                for fpath in stats.get("files_created", []):
-                    if os.path.exists(fpath):
-                        fname = os.path.basename(fpath)
-                        file_meta = save_export_file_stream(email, fname, fpath)
-                        export_files.append(file_meta)
-                    else:
-                        export_files.append({
-                            "name": os.path.basename(fpath),
-                            "size_bytes": 0,
-                            "file_id": None,
-                        })
-            except ImportError:
-                pass
-            except Exception as mge:
-                print(f"[auto-export] Failed to stream files to GridFS: {mge}")
-                # Fallback: whatever files we got partial, at least save metadata
-                pass
-
-            export_record = {
-                "user_email": email,
-                "started_at": prog.get("started_at"),
-                "completed_at": prog.get("completed_at"),
-                "status": "complete",
-                "stats": {
-                    "messages_fetched": stats.get("messages_fetched", 0),
-                    "messages_exported": stats.get("messages_exported", 0),
-                    "threads_fetched": stats.get("threads_fetched", 0),
-                    "threads_exported": stats.get("threads_exported", 0),
-                    "total_files": len(export_files),
-                    "total_size_bytes": stats.get("total_size_bytes", 0),
-                },
-                "files": export_files,
-            }
-            # Store file metadata only in memory (content stays in MongoDB)
-            prog["files"] = [{"name": f["name"], "size_bytes": f["size_bytes"]} for f in export_files]
+            # ── Set in-memory progress from export stats ──
+            file_list = []
+            for fpath in stats.get("files_created", []):
+                fname = os.path.basename(fpath)
+                file_list.append({
+                    "name": fname,
+                    "size_bytes": os.path.getsize(fpath) if os.path.exists(fpath) else 0,
+                })
+            prog["files"] = file_list
             prog["stats"] = {
                 "messages_fetched": stats.get("messages_fetched", 0),
                 "messages_exported": stats.get("messages_exported", 0),
                 "threads_fetched": stats.get("threads_fetched", 0),
                 "threads_exported": stats.get("threads_exported", 0),
-                "total_files": len(export_files),
+                "total_files": len(file_list),
                 "total_size_bytes": stats.get("total_size_bytes", 0),
             }
+
+            # ── Save export files to MongoDB (streamed via GridFS) ──
             try:
-                save_export_record(email, export_record)
-                # Only clean up local files if ALL were successfully streamed to GridFS
-                all_in_gridfs = all(
-                    f.get("file_id") for f in export_files if f.get("size_bytes", 0) > 0
-                )
-                if all_in_gridfs:
-                    from gmail_exporter import cleanup_export_files
-                    cleanup_export_files(stats)
+                from mongo_db import is_available, save_export_file_stream, save_export_record
+
+                if not is_available():
+                    print(f"[auto-export] MongoDB unavailable, keeping files on disk for {email}")
+                else:
+                    export_files = []
+                    for fpath in stats.get("files_created", []):
+                        if os.path.exists(fpath):
+                            fname = os.path.basename(fpath)
+                            file_meta = save_export_file_stream(email, fname, fpath)
+                            export_files.append(file_meta)
+                        else:
+                            export_files.append({"name": os.path.basename(fpath), "size_bytes": 0, "file_id": None})
+
+                    expected = len(stats.get("files_created", []))
+                    if expected > 0 and len(export_files) == expected and all(f.get("file_id") for f in export_files):
+                        save_export_record(email, {
+                            "user_email": email,
+                            "started_at": prog.get("started_at"),
+                            "completed_at": prog.get("completed_at"),
+                            "status": "complete",
+                            "stats": prog["stats"],
+                            "files": export_files,
+                        })
+                        from gmail_exporter import cleanup_export_files
+                        cleanup_export_files(stats)
+                    else:
+                        print(f"[auto-export] GridFS upload incomplete, keeping files on disk for {email}")
             except ImportError:
                 pass
             except Exception as mge:
-                print(f"[auto-export] Failed to save export to MongoDB: {mge}")
+                print(f"[auto-export] MongoDB save failed: {mge}")
 
         except Exception as e:
             print(f"[auto-export] Failed for {email}: {e}")
